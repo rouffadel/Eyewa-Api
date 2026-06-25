@@ -206,6 +206,8 @@ namespace Eyewa_new_api.Models
             public bool Add { get; set; }
             public bool Edit { get; set; }
             public bool Delete { get; set; }
+            public string Token { get; set; }
+            public string RefreshToken { get; set; }
         }
     }
 }
