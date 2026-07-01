@@ -213,20 +213,20 @@ namespace Eyewa_new_api.Services
                         salesId = Convert.ToInt32(row0["ID"]);
                 }
 
-                if (status == "Success" || status == "Payment is successfull.")
-                {
-                    try
-                    {
-                        await GenerateSimplifiedInvoiceworking(save, salesId);
-                    }
-                    catch (Exception zatcaEx)
-                    {
-                        _dbLogger.LogError("ZATCA process error: " + zatcaEx.Message, zatcaEx.StackTrace);
-                        throw new Exception("ZATCA ERROR: " + zatcaEx.Message);
-                    }
+                //if (status == "Success" || status == "Payment is successfull.")
+                //{
+                //    try
+                //    {
+                //        await GenerateSimplifiedInvoiceworking(save, salesId);
+                //    }
+                //    catch (Exception zatcaEx)
+                //    {
+                //        _dbLogger.LogError("ZATCA process error: " + zatcaEx.Message, zatcaEx.StackTrace);
+                //        throw new Exception("ZATCA ERROR: " + zatcaEx.Message);
+                //    }
 
-                    await LoadSalesPrintDataAsync(salesId, sobj);
-                }
+                //    await LoadSalesPrintDataAsync(salesId, sobj);
+                //}
 
                 tres.Status = "200";
                 tres.Message = "Success";
