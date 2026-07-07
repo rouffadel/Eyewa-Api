@@ -1,5 +1,10 @@
-using Eyewa_new_api.Models;
-using Eyewa_new_api.DTOs;
+using static Eyewa.Application.DTOs.Common;
+using Eyewa.Domain.Entities;
+using Eyewa.Application.Interfaces;
+using Eyewa.Application.DTOs;
+using Eyewa.Domain.Entities;
+using Eyewa.Application.DTOs;
+using Eyewa.Application.DTOs;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -19,12 +24,12 @@ using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.OpenSsl;
-using static Eyewa_new_api.Models.Common;
+
 using System.Net.Http;
 using System.Net.Http.Headers;
-using Eyewa.Application.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
-namespace Eyewa_new_api.Services
+namespace Eyewa.Application.Services
 {
     public class SalesService : ISalesService
     {
@@ -1099,3 +1104,8 @@ namespace Eyewa_new_api.Services
         }
     }
 }
+
+
+
+
+

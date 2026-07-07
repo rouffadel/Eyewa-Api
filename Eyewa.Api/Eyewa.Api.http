@@ -1,0 +1,7 @@
+@Eyewa_Api_HostAddress = http://localhost:5261
+
+GET {{Eyewa_Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
