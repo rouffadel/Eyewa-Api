@@ -397,7 +397,8 @@ namespace Eyewa.Application.Services
                     { "@Transaction", "GetSalesDetailGrid1" }
                 };
 
-                var list = await _dbExecutor.ExecuteStoredProcedureAsync("SP_GetDataSales", parameters1);
+                //   var list = await _dbExecutor.ExecuteStoredProcedureAsync("SP_GetDataSales", parameters1);
+                var list = await _dbExecutor.ExecuteStoredProcedureMultiResultAsync("SP_GetDataSales",parameters1);
 
                 if (list == null || list.Count == 0)
                     throw new Exception("Invoice data not found");
@@ -409,25 +410,37 @@ namespace Eyewa.Application.Services
 
                 var list1 = await _dbExecutor.ExecuteStoredProcedureAsync("SP_GetZatcaInvoiceBySalesId", parameters2);
 
-                if (list1 == null || list1.Count == 0)
-                    throw new Exception("ZATCA QR not found");
+                //if (list1 == null || list1.Count == 0)
+                //    throw new Exception("ZATCA QR not found");
 
-                string qrBase64 = list1[0]["QRCode"]?.ToString() ?? "";
 
-                var qrGenerator = new QRCodeGenerator();
-                var qrCodeData = qrGenerator.CreateQrCode(qrBase64, QRCodeGenerator.ECCLevel.Q);
-                var qrCode = new PngByteQRCode(qrCodeData);
-                byte[] qrBytes = qrCode.GetGraphic(20);
+                if (list1 != null && list1.Count > 0)
+                {
+                    string qrBase64 = list1[0]["QRCode"]?.ToString() ?? "";
 
-                string folder = @"C:\Temp";
-                Directory.CreateDirectory(folder);
+                    if (!string.IsNullOrWhiteSpace(qrBase64))
+                    {
+                        var qrGenerator = new QRCodeGenerator();
+                        var qrCodeData = qrGenerator.CreateQrCode(qrBase64, QRCodeGenerator.ECCLevel.Q);
+                        var qrCode = new PngByteQRCode(qrCodeData);
 
-                string filePath = Path.Combine(folder, "zatca_qr.png");
-                File.WriteAllBytes(filePath, qrBytes);
+                        byte[] qrBytes = qrCode.GetGraphic(20);
 
-                string qrImageBase64 = Convert.ToBase64String(qrBytes);
+                        string qrImageBase64 = Convert.ToBase64String(qrBytes);
 
-                tres.qrcodeimg = "data:image/png;base64," + qrImageBase64;
+                        tres.qrcodeimg = "data:image/png;base64," + qrImageBase64;
+                    }
+                }
+
+                //string folder = @"C:\Temp";
+                //Directory.CreateDirectory(folder);
+
+                //string filePath = Path.Combine(folder, "zatca_qr.png");
+                //File.WriteAllBytes(filePath, qrBytes);
+
+                //string qrImageBase64 = Convert.ToBase64String(qrBytes);
+
+                //tres.qrcodeimg = "data:image/png;base64," + qrImageBase64;
                 tres.Status = "200";
                 tres.Message = "Success";
                 tres.objresult = list;
@@ -465,21 +478,21 @@ namespace Eyewa.Application.Services
 
                 var row = list[0];
 
-                string sellerName = "Naimat Al Basar";
-                string vatNo = "310254659700003";
-                string invoiceDate = Convert.ToDateTime(row["InvoiceDate"]).ToString("yyyy-MM-ddTHH:mm:ss");
-                string total = row["NetTotal"]?.ToString() ?? "0";
-                string vatAmount = row["TotalTax"]?.ToString() ?? "0";
+                //string sellerName = "Naimat Al Basar";
+                //string vatNo = "310254659700003";
+                //string invoiceDate = Convert.ToDateTime(row["InvoiceDate"]).ToString("yyyy-MM-ddTHH:mm:ss");
+                //string total = row["NetTotal"]?.ToString() ?? "0";
+                //string vatAmount = row["TotalTax"]?.ToString() ?? "0";
 
-                string base64Qr = GenerateZatcaQr(sellerName, vatNo, invoiceDate, total, vatAmount);
+                //string base64Qr = GenerateZatcaQr(sellerName, vatNo, invoiceDate, total, vatAmount);
 
-                var qrGenerator = new QRCodeGenerator();
-                var qrCodeData = qrGenerator.CreateQrCode(base64Qr, QRCodeGenerator.ECCLevel.Q);
-                var qrCode = new PngByteQRCode(qrCodeData);
-                byte[] qrBytes = qrCode.GetGraphic(20);
-                string qrImageBase64 = Convert.ToBase64String(qrBytes);
+                //var qrGenerator = new QRCodeGenerator();
+                //var qrCodeData = qrGenerator.CreateQrCode(base64Qr, QRCodeGenerator.ECCLevel.Q);
+                //var qrCode = new PngByteQRCode(qrCodeData);
+                //byte[] qrBytes = qrCode.GetGraphic(20);
+                //string qrImageBase64 = Convert.ToBase64String(qrBytes);
 
-                tres.qrcodeimg = "data:image/png;base64," + qrImageBase64;
+                //tres.qrcodeimg = "data:image/png;base64," + qrImageBase64;
                 tres.Status = "200";
                 tres.Message = "Success";
                 tres.objresult = list;

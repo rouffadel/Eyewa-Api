@@ -90,6 +90,78 @@ namespace Eyewa.Infrastructure.Services
             }
         }
 
+
+        public async Task<Dictionary<string, List<Dictionary<string, object>>>> ExecuteStoredProcedureMultiResultAsync(
+    string spName,
+    Dictionary<string, object?> parameters)
+        {
+            var conn = _context.Database.GetDbConnection();
+
+            bool wasClosed = conn.State == ConnectionState.Closed;
+
+            if (wasClosed)
+                await conn.OpenAsync();
+
+            await SetTenantContextAsync(conn);
+
+            try
+            {
+                using var cmd = conn.CreateCommand();
+
+                cmd.CommandText = spName;
+                cmd.CommandType = CommandType.StoredProcedure;
+                cmd.CommandTimeout = 100000;
+
+                foreach (var param in parameters)
+                {
+                    var sqlParam = cmd.CreateParameter();
+                    sqlParam.ParameterName = param.Key;
+                    sqlParam.Value = param.Value ?? DBNull.Value;
+                    cmd.Parameters.Add(sqlParam);
+                }
+
+                using var reader = await cmd.ExecuteReaderAsync();
+
+                var result = new Dictionary<string, List<Dictionary<string, object>>>();
+
+                int tableIndex = 0;
+
+                do
+                {
+                    var rows = new List<Dictionary<string, object>>();
+
+                    while (await reader.ReadAsync())
+                    {
+                        var row = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            row[reader.GetName(i)] =
+                                reader.IsDBNull(i) ? null : reader.GetValue(i);
+                        }
+
+                        rows.Add(row);
+                    }
+
+                    string tableName = tableIndex == 0
+                        ? "table"
+                        : $"table{tableIndex}";
+
+                    result.Add(tableName, rows);
+
+                    tableIndex++;
+
+                } while (await reader.NextResultAsync());
+
+                return result;
+            }
+            finally
+            {
+                if (wasClosed)
+                    await conn.CloseAsync();
+            }
+        }
+
         public async Task<List<Dictionary<string, object>>> ExecuteQueryAsync(string sql, Dictionary<string, object?>? parameters = null)
         {
             var conn = _context.Database.GetDbConnection();

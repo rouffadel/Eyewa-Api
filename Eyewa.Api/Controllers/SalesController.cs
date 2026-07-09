@@ -85,7 +85,7 @@ namespace Eyewa.Api.Controllers
         [HttpGet]
         public async Task<IActionResult> GetSalesDetailsGrid(int SalesId)
         {
-            var result = await _salesService.GetSalesDetailsGrid(SalesId);
+            var result = await _salesService.GetZatcaQrBySalesId(SalesId);
             if (result.Status == "200")
                 return Ok(result);
             return BadRequest(result);
