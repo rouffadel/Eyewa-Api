@@ -105,7 +105,7 @@ namespace Eyewa.Application.Services
                 };
 
                 var result = await _dbExecutor.ExecuteStoredProcedureAsync("SP_Sales_NewwithTax", parameters);
-                
+
                 tres.Status = "200";
                 tres.Message = "Success";
                 foreach (var row in result)
@@ -174,7 +174,21 @@ namespace Eyewa.Application.Services
                 float netTotal = string.IsNullOrEmpty(save.NetTotal) ? 0 : Convert.ToSingle(save.NetTotal);
                 float tax = string.IsNullOrEmpty(save.Tax) ? 0 : Convert.ToSingle(save.Tax);
                 float balance = string.IsNullOrEmpty(save.Balance) ? netTotal : Convert.ToSingle(save.Balance);
-                float paidAmount = string.IsNullOrEmpty(save.AdvancePaidAmount) ? 0 : Convert.ToSingle(save.AdvancePaidAmount);
+                float paidAmount = string.IsNullOrEmpty(save.PaidAmount) ? 0 : Convert.ToSingle(save.PaidAmount);
+
+                string paymentGridStr = "";
+                if (save.Payments != null && save.Payments.Count > 0)
+                {
+                    for (int i = 0; i < save.Payments.Count; i++)
+                    {
+                        string pm = save.Payments[i].PaymentMode ?? "";
+                        string pa = save.Payments[i].PaidAmount ?? "0";
+                        string apa = save.Payments[i].AdvancePaidAmount ?? "0";
+                        string ia = save.Payments[i].InsuranceAmount ?? "0";
+                        paymentGridStr += pm + "~" + pa + "~" + apa + "~" + ia + "$";
+                    }
+                }
+                string paymentGridData = string.IsNullOrEmpty(paymentGridStr) ? "" : paymentGridStr.TrimEnd('$');
 
                 string customerName = save.CustomerName ?? "";
                 string customerNo = save.CustomerNo ?? "";
@@ -198,9 +212,14 @@ namespace Eyewa.Application.Services
                     { "@UserID", salesManID },
                     { "@Balance", balance },
                     { "@PaidAmount", paidAmount },
-                    { "@PaymentMode1", save.PaymentMode },
+                    { "@PaymentMode1", save.PaymentMode ?? "" },
                     { "@Transaction", "InsertSalesDetails" },
-                    { "@TotalTax", tax }
+                    { "@TotalTax", tax },
+                    { "@InsuranceAmount", string.IsNullOrEmpty(save.InsuranceAmount) ? 0 : Convert.ToSingle(save.InsuranceAmount) },
+                    { "@PaymentGridData", paymentGridData },
+                    { "@DeliveryDate", save.DeliveryDate.HasValue ? (object)save.DeliveryDate.Value : DBNull.Value },
+                    { "@EarnedLoyaltyPoints", paidAmount * 1 }, // Multiplier assumed as 1 for now
+                    { "@RedeemedLoyaltyPoints", save.RedeemedLoyaltyPoints }
                 };
 
                 var list = await _dbExecutor.ExecuteStoredProcedureAsync("SP_Sales_NewwithTax", parameters);
@@ -247,6 +266,78 @@ namespace Eyewa.Application.Services
                 tres.Message = ex.Message;
             }
 
+            return tres;
+        }
+
+        public async Task<TransactResult> GetCustomerLoyaltyPoints(string customerNo)
+        {
+            TransactResult tres = new TransactResult();
+            try
+            {
+                if (string.IsNullOrEmpty(customerNo))
+                {
+                    tres.Status = "-100";
+                    tres.Message = "Customer number is required";
+                    return tres;
+                }
+
+                string query = @"
+                    SELECT 
+                        ISNULL(SUM(EarnedLoyaltyPoints), 0) - ISNULL(SUM(RedeemedLoyaltyPoints), 0) AS AvailablePoints 
+                    FROM SaleMaster 
+                    WHERE CustomerNo = @CustomerNo";
+
+                var parameters = new Dictionary<string, object?>
+                {
+                    { "@CustomerNo", customerNo }
+                };
+
+                var list = await _dbExecutor.ExecuteQueryAsync(query, parameters);
+                decimal points = 0;
+
+                if (list != null && list.Count > 0)
+                {
+                    if (list[0].ContainsKey("AvailablePoints") && list[0]["AvailablePoints"] != null)
+                    {
+                        points = Convert.ToDecimal(list[0]["AvailablePoints"]);
+                    }
+                }
+
+                tres.Status = "200";
+                tres.Message = "Success";
+                tres.objresult = new { Points = points };
+            }
+            catch (Exception ex)
+            {
+                _dbLogger.LogError("GetCustomerLoyaltyPoints Method error: " + ex.Message, ex.StackTrace);
+                tres.Status = "-100";
+                tres.Message = ex.Message;
+            }
+            return tres;
+        }
+
+        public async Task<TransactResult> GetTodayDeliveries(int storeId)
+        {
+            TransactResult tres = new TransactResult();
+            try
+            {
+                var parameters = new Dictionary<string, object?>
+                {
+                    { "@StoreId", storeId }
+                };
+
+                var list = await _dbExecutor.ExecuteStoredProcedureAsync("GetTodayDeliveries", parameters);
+
+                tres.Status = "200";
+                tres.Message = "Success";
+                tres.objresult = list;
+            }
+            catch (Exception ex)
+            {
+                _dbLogger.LogError("GetTodayDeliveries Method error: " + ex.Message, ex.StackTrace);
+                tres.Status = "-100";
+                tres.Message = ex.Message;
+            }
             return tres;
         }
 
@@ -300,9 +391,9 @@ namespace Eyewa.Application.Services
                     { "@WhereCondition", whereCondition },
                     { "@Transaction", transaction }
                 };
-                
+
                 var result = await _dbExecutor.ExecuteStoredProcedureAsync("GetDataSalesNew", parameters);
-                
+
                 tres.Status = "200";
                 tres.Message = "Success";
                 tres.objresult = result;
@@ -332,9 +423,9 @@ namespace Eyewa.Application.Services
                     { "@WhereCondition", whereCondition },
                     { "@Transaction", "InvoiceDetails" }
                 };
-                
+
                 var result = await _dbExecutor.ExecuteStoredProcedureAsync("SP_GetDataSales", parameters);
-                
+
                 tres.Status = "200";
                 tres.Message = "Success";
                 tres.objresult = result;
@@ -364,9 +455,9 @@ namespace Eyewa.Application.Services
                     { "@WhereCondition", whereCondition },
                     { "@Transaction", "GetPrintPopup" }
                 };
-                
+
                 var result = await _dbExecutor.ExecuteStoredProcedureAsync("SP_GetDataSales", parameters);
-                
+
                 tres.Status = "200";
                 tres.Message = "Success";
                 tres.objresult = result;
@@ -398,7 +489,7 @@ namespace Eyewa.Application.Services
                 };
 
                 //   var list = await _dbExecutor.ExecuteStoredProcedureAsync("SP_GetDataSales", parameters1);
-                var list = await _dbExecutor.ExecuteStoredProcedureMultiResultAsync("SP_GetDataSales",parameters1);
+                var list = await _dbExecutor.ExecuteStoredProcedureMultiResultAsync("SP_GetDataSales", parameters1);
 
                 if (list == null || list.Count == 0)
                     throw new Exception("Invoice data not found");
@@ -534,9 +625,9 @@ namespace Eyewa.Application.Services
                     { "@PaymentMode1", "" },
                     { "@Transaction", "DeleteSales" }
                 };
-                
+
                 var result = await _dbExecutor.ExecuteStoredProcedureAsync("SP_Sales", parameters);
-                
+
                 tres.Status = "200";
                 tres.Message = "Success";
                 tres.objresult = result;
@@ -578,9 +669,9 @@ namespace Eyewa.Application.Services
                     { "@PaymentMode1", "" },
                     { "@Transaction", "DeleteSalesDetails" }
                 };
-                
+
                 var result = await _dbExecutor.ExecuteStoredProcedureAsync("SP_Sales", parameters);
-                
+
                 tres.Status = "200";
                 tres.Message = "Success";
                 tres.objresult = result;
@@ -646,14 +737,14 @@ namespace Eyewa.Application.Services
 
                 string json = JsonConvert.SerializeObject(requestBody);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                
+
                 var response = await client.PostAsync(
                     "https://gw-fatoora.zatca.gov.sa/e-invoicing/core/invoices/reporting/single",
                     content
                 );
-                
+
                 string result = await response.Content.ReadAsStringAsync();
-                
+
                 if (response.Headers.Contains("requestID"))
                 {
                     var requestId = response.Headers.GetValues("requestID").FirstOrDefault();
@@ -941,12 +1032,12 @@ namespace Eyewa.Application.Services
                 var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(subject, ecdsa, System.Security.Cryptography.HashAlgorithmName.SHA256);
                 var keyUsage = new System.Security.Cryptography.X509Certificates.X509KeyUsageExtension(System.Security.Cryptography.X509Certificates.X509KeyUsageFlags.DigitalSignature | System.Security.Cryptography.X509Certificates.X509KeyUsageFlags.NonRepudiation, true);
                 request.CertificateExtensions.Add(keyUsage);
-                
+
                 using (var tempCert = request.CreateSelfSigned(DateTimeOffset.Now.AddDays(-1), DateTimeOffset.Now.AddYears(10)))
                 {
                     byte[] pkcs8Bytes = ecdsa.ExportPkcs8PrivateKey();
                     privateKeyBase64 = Convert.ToBase64String(pkcs8Bytes);
-                    
+
                     byte[] exportedCertBytes = tempCert.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Cert);
                     certBase64 = Convert.ToBase64String(exportedCertBytes);
                 }
@@ -1115,10 +1206,182 @@ namespace Eyewa.Application.Services
             }
             return tres;
         }
-    }
+
+
+        public async Task<TransactResult> OpenRegister(OpenRegisterRequest request)
+        {
+            TransactResult tres = new();
+
+            try
+            {
+                var parameters = new Dictionary<string, object?>
+        {
+            { "@StoreID", request.StoreId },
+            { "@LoginID", request.LoginId },
+            { "@OpeningAmount", request.OpeningAmount },
+            { "@Transaction", "OpenRegister" }
+        };
+
+                await _dbExecutor.ExecuteStoredProcedureAsync(
+                    "SP_RegisterSession",
+                    parameters);
+
+                tres.Status = "200";
+                tres.Message = "Register Opened Successfully";
+            }
+            catch (Exception ex)
+            {
+                tres.Status = "-100";
+                tres.Message = ex.Message;
+            }
+
+            return tres;
+        }
+
+
+
+        public async Task<TransactResult> GetClosingSummary(RegisterSummaryRequest request)
+        {
+            TransactResult tres = new();
+
+            try
+            {
+                var parameters = new Dictionary<string, object?>
+        {
+            { "@StoreID", request.StoreId },
+            { "@Transaction", "GetClosingSummary" }
+        };
+
+                var result = await _dbExecutor.ExecuteStoredProcedureAsync(
+                    "SP_RegisterSession",
+                    parameters);
+
+                tres.Status = "200";
+                tres.Message = "Success";
+                tres.objresult = result;
+            }
+            catch (Exception ex)
+            {
+                tres.Status = "-100";
+                tres.Message = ex.Message;
+            }
+
+            return tres;
+        }
+
+
+
+        public async Task<TransactResult> CloseRegister(CloseRegisterRequest request)
+        {
+            TransactResult tres = new();
+
+            try
+            {
+                var parameters = new Dictionary<string, object?>
+        {
+            { "@StoreID", request.StoreId },
+            { "@LoginID", request.LoginId },
+            { "@ActualCashAmount", request.ActualCashAmount },
+            { "@CarryForwardAmount", request.CarryForwardAmount },
+            { "@Transaction", "CloseRegister" }
+        };
+
+                var result = await _dbExecutor.ExecuteStoredProcedureAsync(
+                    "SP_RegisterSession",
+                    parameters);
+
+                tres.Status = "200";
+                tres.Message = "Register Closed Successfully";
+                tres.objresult = result;
+            }
+            catch (Exception ex)
+            {
+                tres.Status = "-100";
+                tres.Message = ex.Message;
+            }
+
+            return tres;
+        }
+
+        public async Task<TransactResult> GetFramesSalesReport(string fromDate, string toDate, int storeId)
+        {
+            TransactResult tres = new TransactResult();
+            try
+            {
+                var parameters = new Dictionary<string, object?>
+                {
+                    { "@FromDate", fromDate },
+                    { "@ToDate", toDate },
+                    { "@StoreID", storeId }
+                };
+
+                var list = await _dbExecutor.ExecuteStoredProcedureAsync("SP_GetFramesSalesReport", parameters);
+                tres.Status = "200";
+                tres.Message = "Success";
+                tres.objresult = list;
+
+                decimal totalAmount = 0;
+                decimal totalInsurance = 0;
+                decimal totalNetTotal = 0;
+                decimal totalBalance = 0;
+
+                if (list != null)
+                {
+                    foreach (var row in list)
+                    {
+                        if (row.ContainsKey("PaymentAmount") && row["PaymentAmount"] != null)
+                            totalAmount += Convert.ToDecimal(row["PaymentAmount"]);
+                        if (row.ContainsKey("InsuranceAmount") && row["InsuranceAmount"] != null)
+                            totalInsurance += Convert.ToDecimal(row["InsuranceAmount"]);
+                        if (row.ContainsKey("NetTotal") && row["NetTotal"] != null)
+                            totalNetTotal += Convert.ToDecimal(row["NetTotal"]);
+                        if (row.ContainsKey("Balance") && row["Balance"] != null)
+                            totalBalance += Convert.ToDecimal(row["Balance"]);
+                    }
+                }
+
+                tres.extraData = new
+                {
+                    TotalAmount = totalAmount,
+                    TotalInsurance = totalInsurance,
+                    TotalNetTotal = totalNetTotal,
+                    TotalBalance = totalBalance
+                };
+            }
+            catch (Exception ex)
+            {
+                _dbLogger.LogError("GetFramesSalesReport error: " + ex.Message, ex.StackTrace);
+                tres.Status = "-100";
+                tres.Message = ex.Message;
+            }
+            return tres;
+        }
+
+        public async Task<TransactResult> GetLensSalesReport(string fromDate, string toDate, int storeId)
+        {
+            TransactResult tres = new TransactResult();
+            try
+            {
+                var parameters = new Dictionary<string, object?>
+                {
+                    { "@FromDate", fromDate },
+                    { "@ToDate", toDate },
+                    { "@StoreID", storeId }
+                };
+
+                var list = await _dbExecutor.ExecuteStoredProcedureAsync("SP_GetLensSalesReport", parameters);
+                tres.Status = "200";
+                tres.Message = "Success";
+                tres.objresult = list;
+            }
+            catch (Exception ex)
+            {
+                _dbLogger.LogError("GetLensSalesReport error: " + ex.Message, ex.StackTrace);
+                tres.Status = "-100";
+                tres.Message = ex.Message;
+            }
+            return tres;
+        }
+
+   }
 }
-
-
-
-
-

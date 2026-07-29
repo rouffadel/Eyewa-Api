@@ -74,8 +74,8 @@ namespace Eyewa.Application.DTOs
             public string Status { get; set; }
             public string Message { get; set; }
             public object objresult { get; set; }
-
             public string qrcodeimg { get; set; }
+            public object? extraData { get; set; }
         }
 
         public class TransactResult1
@@ -161,12 +161,25 @@ namespace Eyewa.Application.DTOs
             public string Tax { get; set; }
             public string NetTotal { get; set; }
             public string Balance { get; set; }
-            public string PaidAmount { get; set; }
-            public string AdvancePaidAmount { get; set; }
-            public string PaymentMode { get; set; }
+            public string? PaidAmount { get; set; }
+            public string? AdvancePaidAmount { get; set; }
+            public string? PaymentMode { get; set; }
+            public string? InsuranceAmount { get; set; }
             public string CustomerName { get; set; }
             public string CustomerNo { get; set; }
+            public string? CustomerEmail { get; set; }
             public string SalesManId { get; set; }
+            public List<PaymentDetail>? Payments { get; set; }
+            public DateTime? DeliveryDate { get; set; }
+            public decimal EarnedLoyaltyPoints { get; set; }
+            public decimal RedeemedLoyaltyPoints { get; set; }
+        }
+        public class PaymentDetail
+        {
+            public string PaymentMode { get; set; }
+            public string PaidAmount { get; set; }
+            public string AdvancePaidAmount { get; set; }
+            public string? InsuranceAmount { get; set; }
         }
         public class SalesGrid
         {
@@ -209,6 +222,69 @@ namespace Eyewa.Application.DTOs
             public bool Delete { get; set; }
             public string Token { get; set; }
             public string RefreshToken { get; set; }
+        }
+
+        public class OpenRegisterRequest
+        {
+            public int StoreId { get; set; }
+            public int LoginId { get; set; }
+            public decimal OpeningAmount { get; set; }
+        }
+
+        public class RegisterSummaryRequest
+        {
+            public int StoreId { get; set; }
+        }
+
+        public class CloseRegisterRequest
+        {
+            public int StoreId { get; set; }
+            public int LoginId { get; set; }
+
+            public decimal ActualCashAmount { get; set; }
+
+            public decimal CarryForwardAmount { get; set; }
+        }
+
+        public class UserStoreResponse
+        {
+            public int StoreID { get; set; }
+            public string StoreName { get; set; }
+            public bool IsDefault { get; set; }
+        }
+
+        public class SearchProductRequest
+        {
+            public string SearchText { get; set; }
+        }
+
+        public class ProductDetailsRequest
+        {
+            public int ProductID { get; set; }
+        }
+        public class SalesInsuranceDto
+        {
+            public int SalesInsuranceId { get; set; }
+            public int SalesId { get; set; }
+            public int InsuranceCompanyId { get; set; }
+            public string? InsuranceCompanyName { get; set; }
+            public string? TaxRegistrationNumber { get; set; }
+            public string? PolicyNumber { get; set; }
+            public decimal Compensation { get; set; }
+            public string? CompensationType { get; set; }
+            public DateTime? ValidityStartDate { get; set; }
+            public DateTime? ValidityEndDate { get; set; }
+            public bool IsActive { get; set; }
+        }
+
+        public class InsuranceCompanyDto
+        {
+            public int InsuranceCompanyId { get; set; }
+            public string? InsuranceCompanyName { get; set; }
+            public string? TaxRegistrationNumber { get; set; }
+            public string? ContactEmail { get; set; }
+            public string? ContactPhone { get; set; }
+            public bool IsActive { get; set; }
         }
     }
 }

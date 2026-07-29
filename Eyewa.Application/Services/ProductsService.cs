@@ -192,6 +192,101 @@ namespace Eyewa.Application.Services
             }
             return tres;
         }
+
+        public async Task<TransactResult> SearchProductByKey(int storeId, string productName)
+        {
+            TransactResult tres = new TransactResult();
+
+            try
+            {
+                var parameters = new Dictionary<string, object?>
+                {
+                    { "@StoreID", storeId },
+                    { "@ProductName", productName ?? "" },
+                    { "@WhereCondition", "" },
+                    { "@Transaction", "SearchProductByKey" }
+                };
+
+                var result = await _dbExecutor.ExecuteStoredProcedureAsync(
+                    "SP_GetDataSales",
+                    parameters);
+
+                tres.Status = "200";
+                tres.Message = "Success";
+                tres.objresult = result;
+            }
+            catch (Exception ex)
+            {
+                tres.Status = "-100";
+                tres.Message = ex.Message;
+            }
+
+            return tres;
+        }
+
+
+        public async Task<TransactResult> GetAllProductsByStoreId(int storeId)
+        {
+            TransactResult tres = new TransactResult();
+
+            try
+            {
+                var parameters = new Dictionary<string, object?>
+                {
+                    { "@StoreID", storeId },
+                    { "@WhereCondition", "" },
+                    { "@Transaction", "GetAllProductsByStoreId" }
+                };
+
+                var result = await _dbExecutor.ExecuteStoredProcedureAsync(
+                    "SP_GetDataSales",
+                    parameters);
+
+                tres.Status = "200";
+                tres.Message = "Success";
+                tres.objresult = result;
+            }
+            catch (Exception ex)
+            {
+                tres.Status = "-100";
+                tres.Message = ex.Message;
+            }
+
+            return tres;
+        }
+
+        public async Task<TransactResult> GetCategoryBrandByProduct(int productID)
+        {
+            TransactResult tres = new TransactResult();
+
+            try
+            {
+                string whereCondition =
+                    " AND P.ProductID = " + productID;
+
+                var parameters = new Dictionary<string, object?>
+        {
+            { "@WhereCondition", whereCondition },
+            { "@Transaction", "GetCategoryBrandByProduct" }
+        };
+
+                var result = await _dbExecutor.ExecuteStoredProcedureAsync(
+                    "SP_GetDataSales",
+                    parameters);
+
+                tres.Status = "200";
+                tres.Message = "Success";
+                tres.objresult = result;
+            }
+            catch (Exception ex)
+            {
+                tres.Status = "-100";
+                tres.Message = ex.Message;
+            }
+
+            return tres;
+        }
+
     }
 }
 

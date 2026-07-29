@@ -12,18 +12,21 @@ namespace Eyewa.Application.Interfaces
     {
         Task<TransactResult> InsertSales(SalesCls sales);
         Task<TransactResult> SaveSalesDetails(SaveSalesDetails save);
+        Task<TransactResult> GetTodayDeliveries(int storeId);
         Task<TransactResult> GetSalesGrid(SearchSalesCls obj);
         Task<TransactResult> GetInvoiceDetails(int salesId);
         Task<TransactResult> GetSalesPrint(int salesId);
         Task<TransactResult> GetZatcaQrBySalesId(int salesId);
         Task<TransactResult> GetSalesDetailsGrid(int salesId);
+        Task<TransactResult> GetFramesSalesReport(string fromDate, string toDate, int storeId);
+        Task<TransactResult> GetLensSalesReport(string fromDate, string toDate, int storeId);
         Task<TransactResult> DeleteSales(int salesId, int loginId);
         Task<TransactResult> DeleteSalesDetails(int salesId, int loginId, int salesDetailId);
         Task<TransactResult> CustomerSearchFilter(string mobileNumber);
+        Task<TransactResult> OpenRegister(OpenRegisterRequest request);
+        Task<TransactResult> GetClosingSummary(RegisterSummaryRequest request);
+        Task<TransactResult> CloseRegister(CloseRegisterRequest request);
+        Task<TransactResult> GetCustomerLoyaltyPoints(string customerNo);
     }
 }
-
-
-
-
 

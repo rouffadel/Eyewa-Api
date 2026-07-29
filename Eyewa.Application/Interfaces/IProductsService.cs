@@ -15,6 +15,10 @@ namespace Eyewa.Application.Interfaces
         Task<TransactResult> GetBrand(string brandName);
         Task<TransactResult> GetProduct(int categoryId, int brandId, int storeId, string productName);
         Task<TransactResult> GetQuantity(int productId);
+        Task<TransactResult> SearchProductByKey(int StoreId, String ProductName);
+        Task<TransactResult> GetCategoryBrandByProduct(int productID);
+        Task<TransactResult> GetAllProductsByStoreId(int storeId);
+
     }
 }
 

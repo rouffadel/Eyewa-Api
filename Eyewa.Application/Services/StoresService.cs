@@ -1,13 +1,14 @@
-using static Eyewa.Application.DTOs.Common;
-using Eyewa.Domain.Entities;
+using Eyewa.Application.DTOs;
+using Eyewa.Application.DTOs;
+using Eyewa.Application.DTOs;
 using Eyewa.Application.Interfaces;
-using Eyewa.Application.DTOs;
 using Eyewa.Domain.Entities;
-using Eyewa.Application.DTOs;
-using Eyewa.Application.DTOs;
+using Eyewa.Domain.Entities;
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using static Eyewa.Application.DTOs.Common;
 
 
 namespace Eyewa.Application.Services
@@ -54,9 +55,9 @@ namespace Eyewa.Application.Services
                     { "@whereCondition2", str },
                     { "@Transaction", transaction }
                 };
-                
+
                 var result = await _dbExecutor.ExecuteStoredProcedureAsync("SP_GetDataStoreDeliveryNoteNew", parameters);
-                
+
                 tres.Status = "200";
                 tres.Message = "Success";
                 tres.objresult = result;
@@ -67,6 +68,50 @@ namespace Eyewa.Application.Services
                 tres.Status = "-100";
                 tres.Message = ex.Message;
             }
+            return tres;
+        }
+
+
+        public async Task<TransactResult> GetUserStores(ClaimsPrincipal user)
+        {
+            TransactResult tres = new TransactResult();
+
+            try
+            {
+                //var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                var userIdClaim = user.Claims
+                .FirstOrDefault(x => x.Type == "loginId");
+
+                var tenantIdClaim = user.Claims
+                    .FirstOrDefault(x => x.Type == "tenantId");
+
+                int userId = Convert.ToInt32(userIdClaim?.Value);
+                string tenantId = tenantIdClaim?.Value;
+
+
+
+                var parameters = new Dictionary<string, object?>
+        {
+            { "@LoginID", userId },
+            { "@TenantId", tenantId },
+            { "@Transaction", "GetUserStores" }
+        };
+
+                var result = await _dbExecutor.ExecuteStoredProcedureAsync(
+                    "SP_UserStoreMapping",
+                    parameters);
+
+                tres.Status = "200";
+                tres.Message = "Success";
+                tres.objresult = result;
+            }
+            catch (Exception ex)
+            {
+                tres.Status = "-100";
+                tres.Message = ex.Message;
+            }
+
             return tres;
         }
     }

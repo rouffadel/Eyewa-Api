@@ -80,6 +80,42 @@ namespace Eyewa.Api.Controllers
                 return Ok(result);
             return BadRequest(result);
         }
+
+        [Route("SearchProductByKey")]
+        [HttpPost]
+        public async Task<IActionResult> SearchProductByKey(int StoreId, string ProductName)
+        {
+            var result = await _productsService.SearchProductByKey(StoreId, ProductName);
+
+            if (result.Status == "200")
+                return Ok(result);
+
+            return BadRequest(result);
+        }
+
+        [Route("GetAllProductsByStoreId")]
+        [HttpGet]
+        public async Task<IActionResult> GetAllProductsByStoreId(int StoreId)
+        {
+            var result = await _productsService.GetAllProductsByStoreId(StoreId);
+
+            if (result.Status == "200")
+                return Ok(result);
+
+            return BadRequest(result);
+        }
+
+        [Route("GetCategoryBrandByProduct")]
+        [HttpPost]
+        public async Task<IActionResult> GetCategoryBrandByProduct(int productID)
+        {
+            var result = await _productsService.GetCategoryBrandByProduct(productID);
+
+            if (result.Status == "200")
+                return Ok(result);
+
+            return BadRequest(result);
+        }
     }
 }
 

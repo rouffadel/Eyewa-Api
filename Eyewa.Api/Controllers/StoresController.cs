@@ -40,6 +40,19 @@ namespace Eyewa.Api.Controllers
                 return Ok(result);
             return BadRequest(result);
         }
+
+        [Authorize]
+        [Route("GetUserStores")]
+        [HttpGet]
+        public async Task<IActionResult> GetUserStores()
+        {
+            var result = await _storesService.GetUserStores(User);
+
+            if (result.Status == "200")
+                return Ok(result);
+
+            return BadRequest(result);
+        }
     }
 }
 

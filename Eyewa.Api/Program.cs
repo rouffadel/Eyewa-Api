@@ -69,6 +69,8 @@ builder.Services.AddScoped<IStoresService, StoresService>();
 builder.Services.AddScoped<IZatcaService, ZatcaService>();
 builder.Services.AddScoped<IZatcaQrService, ZatcaQrService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IInsuranceService, InsuranceService>();
 
 // Add Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
