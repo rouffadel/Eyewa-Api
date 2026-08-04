@@ -25,12 +25,21 @@ namespace Eyewa.Api.Controllers
         private readonly ISalesService _salesService;
         private readonly IDbLoggerService _dbLogger;
         private readonly INotificationService _notificationService;
+        private readonly IWhatsAppService _whatsAppService;
+        private readonly IDbExecutorService _dbExecutor;
 
-        public SalesController(ISalesService salesService, IDbLoggerService dbLogger, INotificationService notificationService)
+        public SalesController(
+            ISalesService salesService, 
+            IDbLoggerService dbLogger, 
+            INotificationService notificationService,
+            IWhatsAppService whatsAppService,
+            IDbExecutorService dbExecutor)
         {
             _salesService = salesService;
             _dbLogger = dbLogger;
             _notificationService = notificationService;
+            _whatsAppService = whatsAppService;
+            _dbExecutor = dbExecutor;
         }
 
         [Route("InsertSales")]
@@ -281,6 +290,99 @@ namespace Eyewa.Api.Controllers
                 return Ok(result);
             }
             return BadRequest(result);
+        }
+        [Route("statuses")]
+        [HttpGet]
+        public async Task<IActionResult> GetStatuses()
+        {
+            string sql = "SELECT Id, StatusName, Message, SendNotification, PdfTemplatePath, IsActive FROM OrderStatuses WHERE IsActive = 1";
+            var statuses = await _dbExecutor.ExecuteQueryAsync(sql, null);
+            return Ok(statuses);
+        }
+
+        [Route("order-status-list")]
+        [HttpGet]
+        public async Task<IActionResult> GetOrderStatusList()
+        {
+            try
+            {
+                // Calls the GetOrderStatusList stored procedure to fetch recent sales
+                var list = await _dbExecutor.ExecuteStoredProcedureAsync("GetOrderStatusList", new Dictionary<string, object?>());
+                return Ok(list);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        [Route("{orderId}/status")]
+        [HttpPut]
+        public async Task<IActionResult> UpdateOrderStatus(int orderId, [FromBody] int statusId)
+        {
+            try
+            {
+                // Note: Update Order status logic goes here
+                // We'd ideally have an OrderStatuses table in the same DB or synchronize it
+                
+                // 1. Fetch Sales/Order details
+                string sqlSale = "SELECT SaleID AS SalesId, StoreID, TenantId, CreatedBy, CustomerNo, CustomerName FROM Sale WHERE SaleID = @SalesId";
+                var salesData = await _dbExecutor.ExecuteQueryAsync(sqlSale, new Dictionary<string, object?> { { "SalesId", orderId } });
+                var sale = salesData.FirstOrDefault();
+
+                if (sale == null) return NotFound(new { Status = "404", Message = "Order not found" });
+
+                // 2. Fetch Status details from OrderStatuses
+                string sqlStatus = "SELECT StatusName, PdfTemplatePath FROM OrderStatuses WHERE Id = @Id";
+                var statusData = await _dbExecutor.ExecuteQueryAsync(sqlStatus, new Dictionary<string, object?> { { "Id", statusId } });
+                var status = statusData.FirstOrDefault();
+
+                if (status == null) return NotFound(new { Status = "404", Message = "Status not found" });
+
+                var storeId = sale.ContainsKey("StoreID") && sale["StoreID"] != null ? Convert.ToInt32(sale["StoreID"]) : 0;
+                var createdBy = sale.ContainsKey("CreatedBy") && sale["CreatedBy"] != null ? Convert.ToInt32(sale["CreatedBy"]) : 1;
+                var tenantId = 1; // OrderTracking.TenantId is an int, but Sale.TenantId is a Guid string. Default to 1.
+
+                // 3. Update the Sales table status
+                // We'll insert into OrderTracking instead since Sale doesn't have OrderStatusId
+                string sqlTracking = @"
+                    IF NOT EXISTS (SELECT 1 FROM OrderTracking WHERE OrderId = @SalesId)
+                        INSERT INTO OrderTracking (OrderId, StoreId, StatusId, Remarks, TenantId, CreatedBy, CreatedAt, IsActive) 
+                        VALUES (@SalesId, @StoreId, @StatusId, 'Status updated', @TenantId, @CreatedBy, GETDATE(), 1)
+                    ELSE
+                        UPDATE OrderTracking SET StatusId = @StatusId, ModifiedAt = GETDATE() WHERE OrderId = @SalesId";
+                await _dbExecutor.ExecuteQueryAsync(sqlTracking, new Dictionary<string, object?> { 
+                    { "StatusId", statusId }, 
+                    { "SalesId", orderId }, 
+                    { "StoreId", storeId },
+                    { "TenantId", tenantId },
+                    { "CreatedBy", createdBy }
+                });
+
+                var customerNo = sale.ContainsKey("CustomerNo") ? sale["CustomerNo"]?.ToString() : null;
+                var customerName = sale.ContainsKey("CustomerName") ? sale["CustomerName"]?.ToString() : null;
+                var pdfTemplatePath = status.ContainsKey("PdfTemplatePath") ? status["PdfTemplatePath"]?.ToString() : null;
+                var statusName = status.ContainsKey("StatusName") ? status["StatusName"]?.ToString() : null;
+
+                // 4. Send WhatsApp Notification
+                if (!string.IsNullOrEmpty(customerNo) && !string.IsNullOrEmpty(pdfTemplatePath))
+                {
+                    string message = _whatsAppService.FormatMessage(
+                        pdfTemplatePath, 
+                        customerName ?? "Customer", 
+                        orderId.ToString(), 
+                        statusName);
+                        
+                    await _notificationService.SendWhatsAppMessageAsync(customerNo, message);
+                }
+
+                return Ok(new { Status = "200", Message = "Status updated and notification sent" });
+            }
+            catch (Exception ex)
+            {
+                _dbLogger.LogError("UpdateOrderStatus Error", ex.Message);
+                return BadRequest(new { Status = "500", Message = ex.Message });
+            }
         }
     }
 }

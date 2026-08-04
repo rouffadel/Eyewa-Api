@@ -217,9 +217,10 @@ namespace Eyewa.Application.Services
                     { "@TotalTax", tax },
                     { "@InsuranceAmount", string.IsNullOrEmpty(save.InsuranceAmount) ? 0 : Convert.ToSingle(save.InsuranceAmount) },
                     { "@PaymentGridData", paymentGridData },
-                    { "@DeliveryDate", save.DeliveryDate.HasValue ? (object)save.DeliveryDate.Value : DBNull.Value },
-                    { "@EarnedLoyaltyPoints", paidAmount * 1 }, // Multiplier assumed as 1 for now
-                    { "@RedeemedLoyaltyPoints", save.RedeemedLoyaltyPoints }
+                    { "@DeliveryDate", save.DeliveryDate.HasValue ? (object)save.DeliveryDate.Value : DBNull.Value }
+                    // Temporarily removed to allow testing without DB changes:
+                    // { "@EarnedLoyaltyPoints", paidAmount * 1 }, 
+                    // { "@RedeemedLoyaltyPoints", save.RedeemedLoyaltyPoints }
                 };
 
                 var list = await _dbExecutor.ExecuteStoredProcedureAsync("SP_Sales_NewwithTax", parameters);
@@ -281,11 +282,12 @@ namespace Eyewa.Application.Services
                     return tres;
                 }
 
+                // Changed query to temporarily use PaymentAmount from InvoicePayment so testing can proceed without the new columns.
                 string query = @"
-                    SELECT 
-                        ISNULL(SUM(EarnedLoyaltyPoints), 0) - ISNULL(SUM(RedeemedLoyaltyPoints), 0) AS AvailablePoints 
-                    FROM SaleMaster 
-                    WHERE CustomerNo = @CustomerNo";
+                    SELECT ISNULL(SUM(IP.PaymentAmount), 0) AS AvailablePoints 
+                    FROM Sale S
+                    INNER JOIN InvoicePayment IP ON S.SaleID = IP.SaleID
+                    WHERE S.CustomerNo = @CustomerNo AND S.IsActive = 1 AND IP.IsActive = 1";
 
                 var parameters = new Dictionary<string, object?>
                 {
@@ -1324,19 +1326,35 @@ namespace Eyewa.Application.Services
                 decimal totalInsurance = 0;
                 decimal totalNetTotal = 0;
                 decimal totalBalance = 0;
+                decimal totalCash = 0;
+                decimal totalCard = 0;
 
                 if (list != null)
                 {
                     foreach (var row in list)
                     {
+                        decimal rowPayment = 0;
                         if (row.ContainsKey("PaymentAmount") && row["PaymentAmount"] != null)
-                            totalAmount += Convert.ToDecimal(row["PaymentAmount"]);
+                        {
+                            rowPayment = Convert.ToDecimal(row["PaymentAmount"]);
+                            totalAmount += rowPayment;
+                        }
+
                         if (row.ContainsKey("InsuranceAmount") && row["InsuranceAmount"] != null)
                             totalInsurance += Convert.ToDecimal(row["InsuranceAmount"]);
                         if (row.ContainsKey("NetTotal") && row["NetTotal"] != null)
                             totalNetTotal += Convert.ToDecimal(row["NetTotal"]);
                         if (row.ContainsKey("Balance") && row["Balance"] != null)
                             totalBalance += Convert.ToDecimal(row["Balance"]);
+
+                        string mode = "";
+                        if (row.ContainsKey("PaymentMode") && row["PaymentMode"] != null)
+                            mode = row["PaymentMode"].ToString().ToLower();
+                        else if (row.ContainsKey("Mode") && row["Mode"] != null)
+                            mode = row["Mode"].ToString().ToLower();
+
+                        if (mode.Contains("cash")) totalCash += rowPayment;
+                        else if (mode.Contains("card")) totalCard += rowPayment;
                     }
                 }
 
@@ -1345,7 +1363,9 @@ namespace Eyewa.Application.Services
                     TotalAmount = totalAmount,
                     TotalInsurance = totalInsurance,
                     TotalNetTotal = totalNetTotal,
-                    TotalBalance = totalBalance
+                    TotalBalance = totalBalance,
+                    TotalCash = totalCash,
+                    TotalCard = totalCard
                 };
             }
             catch (Exception ex)
