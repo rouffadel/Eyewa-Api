@@ -1,5 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Eyewa.Application.Interfaces;
+using Eyewa.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using System.Threading.Tasks;
 
 namespace Eyewa.Api.Controllers
 {
@@ -8,16 +12,44 @@ namespace Eyewa.Api.Controllers
     [AllowAnonymous]
     public class TenantAccessController : ControllerBase
     {
-        [HttpGet("default")]
-        public IActionResult GetDefaultTenantAccess()
+        private readonly IApplicationDbContext _context;
+
+        public TenantAccessController(IApplicationDbContext context)
         {
-            var config = new
+            _context = context;
+        }
+
+        //[HttpGet("default")]
+        //public IActionResult GetDefaultTenantAccess()
+        //{
+        //    var config = new
+        //    {
+        //        hasProductsAccess = true,
+        //        hasInsuranceAccess = true,
+        //        hasRedmeePointsAccess = true
+        //    };
+        //    return Ok(config);
+        //}
+
+        [HttpGet("{tenantId}")]
+        public async Task<ActionResult<TenantFeatureAccess>> GetTenantAccess(string tenantId)
+        {
+            var access = await _context.TenantFeatureAccesses
+                .FirstOrDefaultAsync(t => t.TenantId == tenantId);
+
+            if (access == null)
             {
-                hasProductsAccess = true,
-                hasInsuranceAccess = true,
-                hasRedmeePointsAccess = true
-            };
-            return Ok(config);
+                // Return default config if not found
+                return new TenantFeatureAccess
+                {
+                    TenantId = tenantId,
+                    HasInsuranceAccess = false,
+                    HasRedmeePointsAccess = false,
+                    HasProductsAccess = true // default to true
+                };
+            }
+
+            return access;
         }
     }
 }

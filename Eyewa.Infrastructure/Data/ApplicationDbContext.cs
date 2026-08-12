@@ -16,6 +16,7 @@ namespace Eyewa.Infrastructure.Data
         public DbSet<UserRefreshToken> UserRefreshTokens { get; set; }
         public DbSet<NotificationSettings> NotificationSettings { get; set; }
         public DbSet<DbLog> DbLogs { get; set; }
+        public DbSet<TenantFeatureAccess> TenantFeatureAccesses { get; set; }
     }
 }
 
