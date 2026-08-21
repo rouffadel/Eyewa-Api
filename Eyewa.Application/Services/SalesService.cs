@@ -821,6 +821,25 @@ namespace Eyewa.Application.Services
                 totalTax += taxAmount;
             }
 
+            var lensParams = new Dictionary<string, object?> { { "SalesId", save.SalesId } };
+            var lensesResult = _dbExecutor.ExecuteQueryAsync(
+                "SELECT Orderlense, Price, Quantity FROM OrderLense WHERE SalesID = @SalesId AND IsActive = 1",
+                lensParams
+            ).GetAwaiter().GetResult();
+
+            foreach (var lens in lensesResult)
+            {
+                decimal qty = lens.ContainsKey("Quantity") && lens["Quantity"] != null ? Convert.ToDecimal(lens["Quantity"]) : 0;
+                decimal price = lens.ContainsKey("Price") && lens["Price"] != null ? Convert.ToDecimal(lens["Price"]) : 0;
+                decimal taxPer = 15;
+
+                decimal lineAmount = qty * price;
+                decimal taxAmount = (lineAmount * taxPer) / 100;
+
+                totalLineAmount += lineAmount;
+                totalTax += taxAmount;
+            }
+
             decimal taxExclusive = totalLineAmount;
             decimal taxInclusive = totalLineAmount + totalTax;
             decimal payableAmount = taxInclusive - discount;
@@ -924,6 +943,50 @@ namespace Eyewa.Application.Services
 </cac:SellersItemIdentification>
         <cac:ClassifiedTaxCategory>
             <cbc:ID>Z</cbc:ID>
+            <cbc:Percent>{taxPer:F2}</cbc:Percent>
+            <cac:TaxScheme>
+                <cbc:ID>VAT</cbc:ID>
+            </cac:TaxScheme>
+        </cac:ClassifiedTaxCategory>
+    </cac:Item>
+
+    <cac:Price>
+        <cbc:PriceAmount currencyID=""SAR"">{price:F2}</cbc:PriceAmount>
+    </cac:Price>
+</cac:InvoiceLine>
+");
+                lineId++;
+            }
+
+            foreach (var lens in lensesResult)
+            {
+                decimal qty = lens.ContainsKey("Quantity") && lens["Quantity"] != null ? Convert.ToDecimal(lens["Quantity"]) : 0;
+                decimal price = lens.ContainsKey("Price") && lens["Price"] != null ? Convert.ToDecimal(lens["Price"]) : 0;
+                decimal taxPer = 15;
+
+                decimal lineAmount = qty * price;
+                decimal taxAmount = (lineAmount * taxPer) / 100;
+                decimal roundingAmount = lineAmount + taxAmount;
+                string lensName = lens.ContainsKey("Orderlense") && lens["Orderlense"] != null ? Convert.ToString(lens["Orderlense"]) : "Optical Lens";
+
+                sb.Append($@"
+<cac:InvoiceLine>
+    <cbc:ID>{lineId}</cbc:ID>
+    <cbc:InvoicedQuantity unitCode=""PCE"">{qty:F6}</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID=""SAR"">{lineAmount:F2}</cbc:LineExtensionAmount>
+
+    <cac:TaxTotal>
+        <cbc:TaxAmount currencyID=""SAR"">{taxAmount:F2}</cbc:TaxAmount>
+        <cbc:RoundingAmount currencyID=""SAR"">{roundingAmount:F2}</cbc:RoundingAmount>
+    </cac:TaxTotal>
+
+    <cac:Item>
+        <cbc:Name>{lensName}</cbc:Name>
+<cac:SellersItemIdentification>
+    <cbc:ID>0</cbc:ID>
+</cac:SellersItemIdentification>
+        <cac:ClassifiedTaxCategory>
+            <cbc:ID>S</cbc:ID>
             <cbc:Percent>{taxPer:F2}</cbc:Percent>
             <cac:TaxScheme>
                 <cbc:ID>VAT</cbc:ID>

@@ -138,6 +138,7 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 });
+builder.Services.AddSwaggerGenNewtonsoftSupport();
 
 var app = builder.Build();
 

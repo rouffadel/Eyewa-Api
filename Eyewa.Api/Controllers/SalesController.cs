@@ -308,13 +308,71 @@ namespace Eyewa.Api.Controllers
             {
                 // Calls the GetOrderStatusList stored procedure to fetch recent sales
                 var list = await _dbExecutor.ExecuteStoredProcedureAsync("GetOrderStatusList", new Dictionary<string, object?>());
-                return Ok(list);
+                var enrichedList = await EnrichOrderStatusList(list);
+                return Ok(enrichedList);
             }
             catch (Exception ex)
             {
                 return BadRequest(new { Message = ex.Message });
             }
         }
+
+        private async Task<List<Dictionary<string, object>>> EnrichOrderStatusList(List<Dictionary<string, object>> list)
+        {
+            if (list == null) return list;
+
+            foreach (var row in list)
+            {
+                int salesId = 0;
+                if (row.ContainsKey("SalesId") && row["SalesId"] != null)
+                    salesId = Convert.ToInt32(row["SalesId"]);
+                else if (row.ContainsKey("SaleID") && row["SaleID"] != null)
+                    salesId = Convert.ToInt32(row["SaleID"]);
+
+                if (salesId == 0) continue;
+
+                double grossTotal = 0;
+                if (row.ContainsKey("GrossTotal") && row["GrossTotal"] != null)
+                    grossTotal = Convert.ToDouble(row["GrossTotal"]);
+
+                if (grossTotal == 0)
+                {
+                    // Calculate from SalesDetails
+                    string sqlItems = "SELECT ISNULL(SUM(Quantity * SellingPrice), 0) FROM SalesDetails WHERE SalesID = @SalesId AND IsActive = 1";
+                    var itemsRes = await _dbExecutor.ExecuteQueryAsync(sqlItems, new Dictionary<string, object?> { { "SalesId", salesId } });
+                    double itemsSum = itemsRes != null && itemsRes.Count > 0 ? Convert.ToDouble(itemsRes[0].Values.FirstOrDefault() ?? 0) : 0;
+
+                    // Calculate from OrderLense
+                    string sqlLenses = "SELECT ISNULL(SUM(Quantity * Price), 0) FROM OrderLense WHERE SalesID = @SalesId AND IsActive = 1";
+                    var lensesRes = await _dbExecutor.ExecuteQueryAsync(sqlLenses, new Dictionary<string, object?> { { "SalesId", salesId } });
+                    double lensesSum = lensesRes != null && lensesRes.Count > 0 ? Convert.ToDouble(lensesRes[0].Values.FirstOrDefault() ?? 0) : 0;
+
+                    grossTotal = itemsSum + lensesSum;
+
+                    if (grossTotal > 0)
+                    {
+                        grossTotal = Math.Round(grossTotal * 1.15, 2);
+                    }
+
+                    row["GrossTotal"] = grossTotal;
+                }
+
+                // Calculate Paid Amount
+                string sqlPaid = "SELECT ISNULL(SUM(PaymentAmount), 0) FROM InvoicePayment WHERE SaleID = @SalesId AND IsActive = 1";
+                var paidRes = await _dbExecutor.ExecuteQueryAsync(sqlPaid, new Dictionary<string, object?> { { "SalesId", salesId } });
+                double paidAmount = paidRes != null && paidRes.Count > 0 ? Convert.ToDouble(paidRes[0].Values.FirstOrDefault() ?? 0) : 0;
+
+                row["PaidAmount"] = paidAmount;
+
+                // Calculate Balance
+                double balance = grossTotal - paidAmount;
+                if (balance < 0) balance = 0;
+                row["Balance"] = balance;
+            }
+
+            return list;
+        }
+
 
         [Route("{orderId}/status")]
         [HttpPut]
@@ -384,5 +442,47 @@ namespace Eyewa.Api.Controllers
                 return BadRequest(new { Status = "500", Message = ex.Message });
             }
         }
+
+        [Route("record-payment")]
+        [HttpPost]
+        public async Task<IActionResult> RecordPayment([FromBody] RecordPaymentRequest request)
+        {
+            try
+            {
+                // Insert into InvoicePayment
+                string sqlInsert = @"
+                    INSERT INTO InvoicePayment (SaleID, PaymentAmount, PaymentMode, IsActive, CreatedDate) 
+                    VALUES (@SaleID, @PaymentAmount, @PaymentMode, 1, GETDATE())";
+                await _dbExecutor.ExecuteQueryAsync(sqlInsert, new Dictionary<string, object?> {
+                    { "@SaleID", request.SalesId },
+                    { "@PaymentAmount", request.PaymentAmount },
+                    { "@PaymentMode", request.PaymentMode }
+                });
+
+                // Update the Balance in Sale table
+                string sqlUpdate = @"
+                    UPDATE Sale 
+                    SET Balance = CASE WHEN (Balance - @PaymentAmount) < 0 THEN 0 ELSE (Balance - @PaymentAmount) END 
+                    WHERE SaleID = @SalesId";
+                await _dbExecutor.ExecuteQueryAsync(sqlUpdate, new Dictionary<string, object?> {
+                    { "@SalesId", request.SalesId },
+                    { "@PaymentAmount", request.PaymentAmount }
+                });
+
+                return Ok(new { Status = "200", Message = "Payment recorded successfully" });
+            }
+            catch (Exception ex)
+            {
+                _dbLogger.LogError("RecordPayment Error", ex.Message);
+                return BadRequest(new { Status = "500", Message = ex.Message });
+            }
+        }
+    }
+
+    public class RecordPaymentRequest
+    {
+        public int SalesId { get; set; }
+        public decimal PaymentAmount { get; set; }
+        public string PaymentMode { get; set; } = "Cash";
     }
 }

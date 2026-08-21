@@ -45,11 +45,36 @@ namespace Eyewa.Api.Controllers
                     TenantId = tenantId,
                     HasInsuranceAccess = false,
                     HasRedmeePointsAccess = false,
-                    HasProductsAccess = true // default to true
+                    HasProductsAccess = true, // default to true
+                    HasOffersAccess = true // default to true
                 };
             }
 
             return access;
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<TenantFeatureAccess>> SaveTenantAccess([FromBody] TenantFeatureAccess config)
+        {
+            if (config == null) return BadRequest("Invalid configuration payload");
+
+            var existing = await _context.TenantFeatureAccesses
+                .FirstOrDefaultAsync(t => t.TenantId == config.TenantId);
+
+            if (existing == null)
+            {
+                _context.TenantFeatureAccesses.Add(config);
+            }
+            else
+            {
+                existing.HasInsuranceAccess = config.HasInsuranceAccess;
+                existing.HasRedmeePointsAccess = config.HasRedmeePointsAccess;
+                existing.HasProductsAccess = config.HasProductsAccess;
+                existing.HasOffersAccess = config.HasOffersAccess;
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(config);
         }
     }
 }
