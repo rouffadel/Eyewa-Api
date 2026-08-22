@@ -192,18 +192,20 @@ namespace Eyewa.Application.Services
                         for (int index = 0; index < order.PrescriptionDetails.Count; ++index)
                         {
                             string s = string.IsNullOrEmpty(order.PrescriptionDetails[index].sph) ? "~" : order.PrescriptionDetails[index].sph + "~";
-                            string c = string.IsNullOrEmpty(order.PrescriptionDetails[index].cyl) ? s + "~" : s + order.PrescriptionDetails[index].cyl + "~";
-                            string a = string.IsNullOrEmpty(order.PrescriptionDetails[index].axis) ? c + "~" : c + order.PrescriptionDetails[index].axis + "~";
-                            prescStr = string.IsNullOrEmpty(order.PrescriptionDetails[index].add) ? a + "~" : a + order.PrescriptionDetails[index].add + "~";
+                            string c = string.IsNullOrEmpty(order.PrescriptionDetails[index].cyl) ? s : s + order.PrescriptionDetails[index].cyl + "~";
+                            string a = string.IsNullOrEmpty(order.PrescriptionDetails[index].axis) ? c : c + order.PrescriptionDetails[index].axis + "~";
+                            string add = string.IsNullOrEmpty(order.PrescriptionDetails[index].add) ? a : a + order.PrescriptionDetails[index].add + "~";
+                            prescStr += add;
                         }
                     }
 
                     if (order.PrescriptionIpd != null)
                     {
-                        string s = string.IsNullOrEmpty(order.PrescriptionIpd.sphtext) ? prescStr + "~" : prescStr + order.PrescriptionIpd.sphtext + "~";
-                        string c = string.IsNullOrEmpty(order.PrescriptionIpd.cyltext) ? s + "~" : s + order.PrescriptionIpd.cyltext + "~";
-                        string a = string.IsNullOrEmpty(order.PrescriptionIpd.axistext) ? c + "~" : c + order.PrescriptionIpd.axistext + "~";
-                        prescStr = string.IsNullOrEmpty(order.PrescriptionIpd.addtext) ? a + "~" : a + order.PrescriptionIpd.addtext + "~";
+                        string s = string.IsNullOrEmpty(order.PrescriptionIpd.sphtext) ? "~" : order.PrescriptionIpd.sphtext + "~";
+                        string c = string.IsNullOrEmpty(order.PrescriptionIpd.cyltext) ? s : s + order.PrescriptionIpd.cyltext + "~";
+                        string a = string.IsNullOrEmpty(order.PrescriptionIpd.axistext) ? c : c + order.PrescriptionIpd.axistext + "~";
+                        string add = string.IsNullOrEmpty(order.PrescriptionIpd.addtext) ? a : a + order.PrescriptionIpd.addtext + "~";
+                        prescStr += add;
                     }
 
                     if (prescStr != "")

@@ -92,7 +92,7 @@ namespace Eyewa.Api.Controllers
                         string whatsappMsg = "Please find your receipt attached below.";
 
                         // Generate the Image receipt!
-                        byte[] receiptImageBytes = Eyewa.Application.Helpers.ReceiptGenerator.GenerateImageReceipt(save, qrImgBase64);
+                        byte[] receiptImageBytes = Eyewa.Application.Helpers.ReceiptGenerator.GenerateImageReceipt(save, qrImgBase64, qrResult?.objresult);
                         string receiptImageBase64 = "data:image/png;base64," + Convert.ToBase64String(receiptImageBytes);
 
                         var (success, errMsg) = await _notificationService.SendWhatsAppMessageAsync(
@@ -127,7 +127,7 @@ namespace Eyewa.Api.Controllers
                     string emailSubject = "Eyewa - Invoice Receipt";
 
                     // Generate the HTML receipt!
-                    string emailBody = Eyewa.Application.Helpers.ReceiptGenerator.GenerateHtmlReceipt(save, qrImgBase64);
+                    string emailBody = Eyewa.Application.Helpers.ReceiptGenerator.GenerateHtmlReceipt(save, qrImgBase64, qrResult?.objresult);
 
                     if (!string.IsNullOrEmpty(qrImgBase64))
                     {

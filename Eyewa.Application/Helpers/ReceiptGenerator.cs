@@ -1,58 +1,165 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.IO;
+using System.Linq;
 using static Eyewa.Application.DTOs.Common;
 
 namespace Eyewa.Application.Helpers
 {
     public static class ReceiptGenerator
     {
-        public static string GenerateHtmlReceipt(SaveSalesDetails save, string qrBase64)
+        public class ReceiptItemLine
         {
+            public string Category { get; set; } = "—";
+            public string Brand { get; set; } = "—";
+            public string Model { get; set; } = "—";
+            public double Price { get; set; }
+            public int Quantity { get; set; } = 1;
+            public double Tax { get; set; }
+            public double Discount { get; set; }
+            public double Total { get; set; }
+        }
+
+        public static string GenerateHtmlReceipt(SaveSalesDetails save, string qrBase64, object dbResult = null)
+        {
+            var data = ParseReceiptData(save, dbResult);
+
+            string itemRowsHtml = "";
+            foreach (var item in data.Items)
+            {
+                itemRowsHtml += $@"
+                <tr>
+                    <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{item.Category}</td>
+                    <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{item.Brand}</td>
+                    <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{item.Model}</td>
+                    <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{item.Price:0.00}</td>
+                    <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{item.Quantity}</td>
+                    <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{item.Tax:0.00}</td>
+                    <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{item.Discount:0.00}</td>
+                    <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{item.Total:0.00}</td>
+                </tr>";
+            }
+
             string html = $@"
             <html>
             <head>
                 <style>
                     body {{ font-family: Arial, sans-serif; color: #333; }}
-                    .receipt-container {{ width: 400px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }}
+                    .receipt-container {{ width: 650px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }}
                     .header {{ text-align: center; margin-bottom: 20px; }}
-                    .header h2 {{ margin: 0; color: #4CAF50; }}
-                    .item-row {{ display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px dashed #eee; padding-bottom: 5px; }}
-                    .total-row {{ display: flex; justify-content: space-between; font-weight: bold; font-size: 1.1em; margin-top: 15px; border-top: 2px solid #333; padding-top: 10px; }}
-                    .qr-section {{ text-align: center; margin-top: 30px; }}
-                    .qr-section img {{ width: 150px; height: 150px; }}
-                    .footer {{ text-align: center; margin-top: 20px; font-size: 0.9em; color: #777; }}
+                    .header h2 {{ margin: 0; color: #cfab3a; }}
+                    .meta-table {{ width: 100%; margin-bottom: 15px; font-size: 14px; font-weight: bold; }}
+                    .data-table {{ width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 13px; }}
+                    .data-table th {{ background-color: #f0f0f0; border: 1px solid #ccc; padding: 8px; text-align: center; }}
+                    .total-row {{ font-weight: bold; font-size: 1.1em; margin-top: 15px; border-top: 2px solid #333; padding-top: 10px; }}
+                    .qr-section {{ text-align: center; margin-top: 20px; }}
+                    .qr-section img {{ width: 135px; height: 135px; }}
+                    .footer {{ text-align: center; margin-top: 20px; font-size: 0.85em; color: #555; background: #1a1a1a; color: #fff; padding: 10px; border-radius: 4px; }}
                 </style>
             </head>
             <body>
                 <div class='receipt-container'>
                     <div class='header'>
-                        <h2>Eyewa Store</h2>
-                        <p>Thank you for your purchase!</p>
+                        <h2>Naimat Al Basar Optical</h2>
+                        <p>Simplified Tax Invoice - فاتورة ضريبية مبسطة</p>
                     </div>
                     
-                    <div class='item-row'><span>Sales ID:</span> <span>{save.SalesId}</span></div>
-                    <div class='item-row'><span>Customer:</span> <span>{save.CustomerName}</span></div>
-                    <div class='item-row'><span>Phone:</span> <span>{save.CustomerNo}</span></div>
-                    
-                    <br/>
-                    <div class='item-row'><span>Gross Total:</span> <span>{save.GrossTotal} SAR</span></div>
-                    <div class='item-row'><span>Discount:</span> <span>{save.Discount} SAR</span></div>
-                    <div class='item-row'><span>VAT:</span> <span>{save.Tax} SAR</span></div>
-                    
-                    <div class='total-row'><span>Net Total:</span> <span>{save.NetTotal} SAR</span></div>
-                    <div class='item-row'><span>Amount Paid:</span> <span>{save.PaidAmount} SAR</span></div>
-                    <div class='item-row'><span>Balance:</span> <span>{save.Balance} SAR</span></div>
+                    <table class='meta-table'>
+                        <tr>
+                            <td>Inv No : {data.InvoiceNo}</td>
+                            <td style='text-align:right;'>Name : {data.CustomerName}</td>
+                        </tr>
+                        <tr>
+                            <td>Date : {data.InvoiceDate}</td>
+                            <td style='text-align:right;'>Number : {data.CustomerNo}</td>
+                        </tr>
+                    </table>
 
-                    <div class='qr-section'>
-                        <img src='cid:qrcodeimg' alt='ZATCA QR Code' />
+                    <table class='data-table'>
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Brand</th>
+                                <th>Model</th>
+                                <th>Price</th>
+                                <th>Qty</th>
+                                <th>VAT</th>
+                                <th>Discount</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {itemRowsHtml}
+                        </tbody>
+                    </table>
+
+                    <table class='data-table'>
+                        <thead>
+                            <tr>
+                                <th>Prescription Details</th>
+                                <th>SPH</th>
+                                <th>CYL</th>
+                                <th>AXIS</th>
+                                <th>ADD</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style='padding:6px; border:1px solid #ccc;'>Right Eye</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{data.SphRight}</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{data.CylRight}</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{data.AxisRight}</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{data.AddRight}</td>
+                            </tr>
+                            <tr>
+                                <td style='padding:6px; border:1px solid #ccc;'>Left Eye</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{data.SphLeft}</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{data.CylLeft}</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{data.AxisLeft}</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{data.AddLeft}</td>
+                            </tr>
+                            <tr>
+                                <td style='padding:6px; border:1px solid #ccc;'>IPD</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{data.Ipd}</td>
+                                <td style='padding:6px; border:1px solid #ccc;' colspan='3'></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div style='display:flex; justify-content:space-between; align-items:center;'>
+                        <div class='qr-section'>
+                            <img src='cid:qrcodeimg' alt='ZATCA QR Code' />
+                        </div>
+                        <table style='width:320px; border-collapse:collapse; font-size:13px; font-weight:bold;'>
+                            <tr>
+                                <td style='padding:6px; background:#f0f0f0; border:1px solid #ccc;'>Details:</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:right;'>Total Amount:</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{data.NetTotal:0.00}</td>
+                            </tr>
+                            <tr>
+                                <td style='padding:6px; background:#f0f0f0; border:1px solid #ccc;'>Payment Mode</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:right;'>Amount Paid:</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{data.PaidAmount:0.00}</td>
+                            </tr>
+                            <tr>
+                                <td style='padding:6px; border:1px solid #ccc;'>{data.PaymentMode}</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:right;'>Total VAT:</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center;'>{data.Tax:0.00}</td>
+                            </tr>
+                            <tr>
+                                <td style='padding:6px; border:1px solid #ccc;'></td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:right;'>Balance:</td>
+                                <td style='padding:6px; border:1px solid #ccc; text-align:center; color:red;'>{data.Balance:0.00}</td>
+                            </tr>
+                        </table>
                     </div>
                     
                     <div class='footer'>
-                        Please keep this receipt for your records.
+                        Thank you for your purchase!
                     </div>
                 </div>
             </body>
@@ -61,22 +168,12 @@ namespace Eyewa.Application.Helpers
             return html;
         }
 
-        public static byte[] GenerateImageReceipt(SaveSalesDetails save, string qrBase64)
+        public static byte[] GenerateImageReceipt(SaveSalesDetails save, string qrBase64, object dbResult = null)
         {
-            // Parse decimal values safely
-            double.TryParse(save.GrossTotal, out double grossTotalVal);
-            double.TryParse(save.Discount, out double discountVal);
-            double.TryParse(save.Tax, out double taxVal);
-            double.TryParse(save.NetTotal, out double netTotalVal);
-            double.TryParse(save.PaidAmount, out double paidAmountVal);
-            double.TryParse(save.Balance, out double balanceVal);
+            var data = ParseReceiptData(save, dbResult);
 
-            // Construct invoice number dynamically
-            string invoiceNo = $"2020-{DateTime.Now.ToString("ddMMyyyy")}-{save.SalesId}";
-
-            // Square Canvas: 750px width x 750px height
-            int width = 750;
-            int height = 750;
+            int width = 500;
+            int height = 720;
 
             using (Bitmap bitmap = new Bitmap(width, height))
             using (Graphics g = Graphics.FromImage(bitmap))
@@ -85,347 +182,411 @@ namespace Eyewa.Application.Helpers
                 g.SmoothingMode = SmoothingMode.HighQuality;
                 g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
 
-                // --- 1. Header (110px height) ---
-                Color goldColor = Color.FromArgb(207, 171, 58);
-                Color darkColor = Color.FromArgb(26, 26, 26);
-
-                using (SolidBrush goldBrush = new SolidBrush(goldColor))
-                using (SolidBrush darkBrush = new SolidBrush(darkColor))
-                using (SolidBrush whiteBrush = new SolidBrush(Color.White))
-                using (Pen goldPen = new Pen(goldColor, 2))
-                {
-                    // Draw backgrounds
-                    g.FillRectangle(goldBrush, 0, 0, 240, 110);
-                    g.FillRectangle(darkBrush, 240, 0, width - 240, 110);
-
-                    // Left Block Contact Info
-                    using (Font contactFont = new Font("Arial", 9.5f, FontStyle.Bold))
-                    {
-                        g.DrawString("📞  013 5883617", contactFont, whiteBrush, 15, 30);
-                        g.DrawString("✉  nb.optical@hotmail.com", contactFont, whiteBrush, 15, 60);
-                    }
-
-                    // Middle Logo Block (inside dark background)
-                    g.DrawEllipse(goldPen, 265, 30, 26, 26);
-                    g.DrawEllipse(goldPen, 300, 30, 26, 26);
-                    g.DrawLine(goldPen, 291, 43, 300, 43);
-                    using (Font logoNameFont = new Font("Arial", 11f, FontStyle.Bold))
-                    {
-                        g.DrawString("NB", logoNameFont, goldBrush, 281, 10);
-                    }
-                    using (Font subLogoFont = new Font("Arial", 4.5f, FontStyle.Bold))
-                    {
-                        g.DrawString("NAIMAT AL BASAR OPTICAL", subLogoFont, goldBrush, 255, 62);
-                    }
-
-                    // Right Text Block
-                    using (Font arabicTitleFont = new Font("Arial", 18f, FontStyle.Bold))
-                    using (Font englishTitleFont = new Font("Arial", 9f, FontStyle.Bold))
-                    using (Font vatFont = new Font("Arial", 8.5f, FontStyle.Bold))
-                    using (Font typeFont = new Font("Arial", 7.5f, FontStyle.Bold))
-                    {
-                        StringFormat rightFormat = new StringFormat { Alignment = StringAlignment.Far };
-                        g.DrawString("نظارات نعمة البصر", arabicTitleFont, whiteBrush, width - 15, 12, rightFormat);
-                        g.DrawString("NAIMAT AL BASAR OPTICAL", englishTitleFont, goldBrush, width - 15, 45, rightFormat);
-                        g.DrawString("الرقم المميز : ٣١٠٢٥٤٦٥٩٧٠٠٠٠٣", vatFont, whiteBrush, width - 15, 64, rightFormat);
-                        g.DrawString("Simplified Tax Invoice   فاتورة ضريبية مبسطة", typeFont, goldBrush, width - 15, 82, rightFormat);
-                    }
-                }
-
-                // --- 2. Metadata Section (110px to 175px) ---
-                int currentY = 110;
-                using (Pen blackPen = new Pen(Color.Black, 2.5f))
-                using (Font metaFont = new Font("Arial", 11f, FontStyle.Bold))
                 using (SolidBrush textBrush = new SolidBrush(Color.Black))
+                using (SolidBrush grayBrush = new SolidBrush(Color.FromArgb(120, 120, 120)))
+                using (Pen dashedPen = new Pen(Color.FromArgb(200, 200, 200), 1.5f) { DashStyle = DashStyle.Dash })
+                using (Pen solidPen = new Pen(Color.Black, 2f))
                 {
-                    g.DrawString($"Inv No   :   {invoiceNo}", metaFont, textBrush, 15, currentY + 10);
-                    g.DrawString($"Name    :   {save.CustomerName}", metaFont, textBrush, 400, currentY + 10);
-                    
-                    g.DrawString($"Date      :   {DateTime.Now.ToString("yyyy-MM-dd")}", metaFont, textBrush, 15, currentY + 36);
-                    g.DrawString($"Number :   {save.CustomerNo}", metaFont, textBrush, 400, currentY + 36);
-
-                    currentY += 68;
-                    g.DrawLine(blackPen, 0, currentY, width, currentY);
-                }
-
-                // --- 3. Products Table ---
-                currentY += 8;
-                using (Pen doublePen = new Pen(Color.Black, 1.5f))
-                using (Font tableHeaderFont = new Font("Arial", 10.5f, FontStyle.Bold))
-                using (Font tableCellFont = new Font("Arial", 10.5f, FontStyle.Bold))
-                using (SolidBrush headerBg = new SolidBrush(Color.FromArgb(240, 240, 240)))
-                {
-                    g.DrawRectangle(doublePen, 15, currentY, width - 30, 110);
-                    g.DrawRectangle(doublePen, 17, currentY + 2, width - 34, 106);
-
-                    int[] colWidths = { 90, 110, 100, 80, 60, 60, 80, 140 };
-                    int startX = 15;
-
-                    for (int i = 0; i < colWidths.Length; i++)
+                    // --- 1. Header ---
+                    using (Font titleFont = new Font("Arial", 22f, FontStyle.Bold))
+                    using (Font subTitleFont = new Font("Arial", 13f, FontStyle.Regular))
                     {
-                        g.FillRectangle(headerBg, startX, currentY + 4, colWidths[i], 32);
-                        g.DrawRectangle(Pens.Black, startX, currentY + 4, colWidths[i], 32);
-                        startX += colWidths[i];
+                        StringFormat centerFormat = new StringFormat { Alignment = StringAlignment.Center };
+                        g.DrawString("Eyewa Store", titleFont, textBrush, new RectangleF(0, 30, width, 40), centerFormat);
+                        g.DrawString("Thank you for your purchase!", subTitleFont, grayBrush, new RectangleF(0, 75, width, 30), centerFormat);
                     }
 
-                    string[] headers = { "Category", "Brand", "Model", "Price", "Qty", "VAT", "Discount", "Total" };
-                    startX = 15;
-                    StringFormat cellFormat = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                    for (int i = 0; i < headers.Length; i++)
+                    // Dashed Line 1
+                    g.DrawLine(dashedPen, 35, 120, width - 35, 120);
+
+                    // --- 2. Customer & Order Details ---
+                    using (Font labelFont = new Font("Arial", 13f, FontStyle.Regular))
+                    using (Font valueFont = new Font("Arial", 13f, FontStyle.Bold))
                     {
-                        g.DrawString(headers[i], tableHeaderFont, Brushes.Black, new RectangleF(startX, currentY + 4, colWidths[i], 32), cellFormat);
-                        startX += colWidths[i];
-                    }
+                        int y = 138;
+                        int leftX = 40;
+                        int rightX = width - 40;
+                        int rowHeight = 36;
+                        StringFormat rightFormat = new StringFormat { Alignment = StringAlignment.Far };
 
-                    int rowY = currentY + 36;
-                    
-                    // Row 1
-                    g.DrawRectangle(Pens.Black, 15, rowY, colWidths[0], 32);
-                    g.DrawString("CR39", tableCellFont, Brushes.Black, new RectangleF(15, rowY, colWidths[0], 32), cellFormat);
+                        // Row 1: Sales ID
+                        g.DrawString("Sales ID:", labelFont, textBrush, leftX, y);
+                        g.DrawString(data.InvoiceNo, valueFont, textBrush, rightX, y, rightFormat);
 
-                    g.DrawRectangle(Pens.Black, 15 + colWidths[0], rowY, colWidths[1], 32);
-                    g.DrawString("privo bc", tableCellFont, Brushes.Black, new RectangleF(15 + colWidths[0], rowY, colWidths[1], 32), cellFormat);
+                        // Row 2: Customer
+                        y += rowHeight;
+                        g.DrawString("Customer:", labelFont, textBrush, leftX, y);
+                        g.DrawString(data.CustomerName, valueFont, textBrush, rightX, y, rightFormat);
 
-                    g.DrawRectangle(Pens.Black, 15 + colWidths[0] + colWidths[1], rowY, colWidths[2], 32);
-                    g.DrawString("", tableCellFont, Brushes.Black, new RectangleF(15 + colWidths[0] + colWidths[1], rowY, colWidths[2], 32), cellFormat);
+                        // Row 3: Phone
+                        y += rowHeight;
+                        g.DrawString("Phone:", labelFont, textBrush, leftX, y);
+                        g.DrawString(data.CustomerNo, valueFont, textBrush, rightX, y, rightFormat);
 
-                    g.DrawRectangle(Pens.Black, 15 + colWidths[0] + colWidths[1] + colWidths[2], rowY, colWidths[3], 32);
-                    g.DrawString((grossTotalVal / 2).ToString("0.00"), tableCellFont, Brushes.Black, new RectangleF(15 + colWidths[0] + colWidths[1] + colWidths[2], rowY, colWidths[3], 32), cellFormat);
+                        // Dashed Line 2
+                        y += rowHeight + 10;
+                        g.DrawLine(dashedPen, 35, y, width - 35, y);
 
-                    g.DrawRectangle(Pens.Black, 15 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], rowY, colWidths[4], 32);
-                    g.DrawString("2", tableCellFont, Brushes.Black, new RectangleF(15 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], rowY, colWidths[4], 32), cellFormat);
+                        // --- 3. Subtotals Breakdown ---
+                        y += 20;
 
-                    g.DrawRectangle(Pens.Black, 15 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4], rowY, colWidths[5], 32);
-                    g.DrawString("0", tableCellFont, Brushes.Black, new RectangleF(15 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4], rowY, colWidths[5], 32), cellFormat);
+                        // Row 1: Gross Total
+                        g.DrawString("Gross Total:", labelFont, textBrush, leftX, y);
+                        g.DrawString(FormatMoneySar(data.GrossTotal), labelFont, textBrush, rightX, y, rightFormat);
 
-                    g.DrawRectangle(Pens.Black, 15 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + colWidths[5], rowY, colWidths[6], 32);
-                    g.DrawString("0", tableCellFont, Brushes.Black, new RectangleF(15 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + colWidths[5], rowY, colWidths[6], 32), cellFormat);
+                        // Row 2: Discount
+                        y += rowHeight;
+                        g.DrawString("Discount:", labelFont, textBrush, leftX, y);
+                        g.DrawString(FormatMoneySar(data.Discount), labelFont, textBrush, rightX, y, rightFormat);
 
-                    g.DrawRectangle(Pens.Black, 15 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + colWidths[5] + colWidths[6], rowY, colWidths[7], 32);
-                    g.DrawString(grossTotalVal.ToString("0.00"), tableCellFont, Brushes.Black, new RectangleF(15 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + colWidths[5] + colWidths[6], rowY, colWidths[7], 32), cellFormat);
+                        // Row 3: VAT
+                        y += rowHeight;
+                        g.DrawString("VAT:", labelFont, textBrush, leftX, y);
+                        g.DrawString(FormatMoneySar(data.Tax), labelFont, textBrush, rightX, y, rightFormat);
 
-                    // Row 2 Spacer
-                    rowY += 32;
-                    for (int i = 0; i < colWidths.Length; i++)
-                    {
-                        g.DrawRectangle(Pens.Black, 15 + (i > 0 ? SumWidths(colWidths, i) : 0), rowY, colWidths[i], 32);
-                    }
+                        // Solid Divider Line
+                        y += rowHeight + 10;
+                        g.DrawLine(solidPen, 35, y, width - 35, y);
 
-                    currentY += 112;
-                }
+                        // --- 4. Main Totals ---
+                        y += 20;
 
-                // --- 4. Prescription Details ---
-                currentY += 10;
-                using (Pen doublePen = new Pen(Color.Black, 1.5f))
-                using (Font tableHeaderFont = new Font("Arial", 10.5f, FontStyle.Bold))
-                using (Font tableCellFont = new Font("Arial", 10.5f, FontStyle.Bold))
-                using (SolidBrush headerBg = new SolidBrush(Color.FromArgb(240, 240, 240)))
-                {
-                    g.DrawRectangle(doublePen, 15, currentY, width - 30, 130);
-                    g.DrawRectangle(doublePen, 17, currentY + 2, width - 34, 126);
+                        // Row 1: Net Total
+                        g.DrawString("Net Total:", valueFont, textBrush, leftX, y);
+                        g.DrawString(FormatMoneySar2Decimals(data.NetTotal), valueFont, textBrush, rightX, y, rightFormat);
 
-                    int[] rxColWidths = { 300, 100, 100, 100, 120 };
-                    int rxStartY = currentY + 4;
-                    StringFormat cellFormat = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                        // Row 2: Amount Paid
+                        y += rowHeight;
+                        g.DrawString("Amount Paid:", labelFont, textBrush, leftX, y);
+                        g.DrawString(FormatMoneySar(data.PaidAmount), labelFont, textBrush, rightX, y, rightFormat);
 
-                    string[] rxHeaders = { "Prescription Details", "SPH", "CYL", "AXIS", "ADD" };
-                    int currentX = 15;
-                    for (int i = 0; i < rxHeaders.Length; i++)
-                    {
-                        g.FillRectangle(headerBg, currentX, rxStartY, rxColWidths[i], 30);
-                        g.DrawRectangle(Pens.Black, currentX, rxStartY, rxColWidths[i], 30);
-                        g.DrawString(rxHeaders[i], tableHeaderFont, Brushes.Black, new RectangleF(currentX, rxStartY, rxColWidths[i], 30), cellFormat);
-                        currentX += rxColWidths[i];
-                    }
+                        // Row 3: Balance
+                        y += rowHeight;
+                        g.DrawString("Balance:", valueFont, textBrush, leftX, y);
+                        g.DrawString(FormatMoneySar2Decimals(data.Balance), valueFont, textBrush, rightX, y, rightFormat);
 
-                    // Row 1: Right Eye
-                    rxStartY += 30;
-                    currentX = 15;
-                    string[] rightEyeData = { "Right Eye", "0.00", "0.00", "0", "1.50" };
-                    for (int i = 0; i < rightEyeData.Length; i++)
-                    {
-                        g.DrawRectangle(Pens.Black, currentX, rxStartY, rxColWidths[i], 30);
-                        g.DrawString(rightEyeData[i], tableCellFont, Brushes.Black, new RectangleF(currentX, rxStartY, rxColWidths[i], 30), (i == 0) ? new StringFormat { LineAlignment = StringAlignment.Center } : cellFormat);
-                        currentX += rxColWidths[i];
-                    }
+                        // --- 5. QR Code ---
+                        y += rowHeight + 25;
+                        int qrSize = 175;
+                        int qrX = (width - qrSize) / 2;
 
-                    // Row 2: Left Eye
-                    rxStartY += 30;
-                    currentX = 15;
-                    string[] leftEyeData = { "Left Eye", "0.00", "0.00", "0", "1.50" };
-                    for (int i = 0; i < leftEyeData.Length; i++)
-                    {
-                        g.DrawRectangle(Pens.Black, currentX, rxStartY, rxColWidths[i], 30);
-                        g.DrawString(leftEyeData[i], tableCellFont, Brushes.Black, new RectangleF(currentX, rxStartY, rxColWidths[i], 30), (i == 0) ? new StringFormat { LineAlignment = StringAlignment.Center } : cellFormat);
-                        currentX += rxColWidths[i];
-                    }
-
-                    // Row 3: IPD
-                    rxStartY += 30;
-                    currentX = 15;
-                    g.DrawRectangle(Pens.Black, currentX, rxStartY, rxColWidths[0], 30);
-                    g.DrawString("IPD", tableCellFont, Brushes.Black, new RectangleF(currentX, rxStartY, rxColWidths[0], 30), new StringFormat { LineAlignment = StringAlignment.Center });
-                    
-                    g.DrawRectangle(Pens.Black, currentX + rxColWidths[0], rxStartY, rxColWidths[1], 30);
-                    g.DrawString("61", tableCellFont, Brushes.Black, new RectangleF(currentX + rxColWidths[0], rxStartY, rxColWidths[1], 30), cellFormat);
-
-                    g.DrawRectangle(Pens.Black, currentX + rxColWidths[0] + rxColWidths[1], rxStartY, rxColWidths[2], 30);
-                    g.DrawRectangle(Pens.Black, currentX + rxColWidths[0] + rxColWidths[1] + rxColWidths[2], rxStartY, rxColWidths[3], 30);
-                    g.DrawRectangle(Pens.Black, currentX + rxColWidths[0] + rxColWidths[1] + rxColWidths[2] + rxColWidths[3], rxStartY, rxColWidths[4], 30);
-
-                    currentY += 134;
-                }
-
-                // --- 5. Footer Row with QR Code and Totals Box ---
-                currentY += 10;
-                int qrSize = 135;
-                if (!string.IsNullOrEmpty(qrBase64))
-                {
-                    try
-                    {
-                        string cleanBase64 = qrBase64;
-                        if (cleanBase64.Contains(","))
+                        if (!string.IsNullOrEmpty(qrBase64))
                         {
-                            cleanBase64 = cleanBase64.Substring(cleanBase64.IndexOf(",") + 1);
-                        }
+                            try
+                            {
+                                string cleanBase64 = qrBase64;
+                                if (cleanBase64.Contains(","))
+                                {
+                                    cleanBase64 = cleanBase64.Substring(cleanBase64.IndexOf(",") + 1);
+                                }
 
-                        byte[] qrBytes = Convert.FromBase64String(cleanBase64);
-                        using (MemoryStream ms = new MemoryStream(qrBytes))
-                        using (Image qrImage = Image.FromStream(ms))
-                        {
-                            g.DrawImage(qrImage, 15, currentY, qrSize, qrSize);
-                            g.DrawRectangle(Pens.Black, 15, currentY, qrSize, qrSize);
+                                byte[] qrBytes = Convert.FromBase64String(cleanBase64);
+                                using (MemoryStream ms = new MemoryStream(qrBytes))
+                                using (Image qrImage = Image.FromStream(ms))
+                                {
+                                    g.DrawImage(qrImage, qrX, y, qrSize, qrSize);
+                                }
+                            }
+                            catch
+                            {
+                                g.DrawRectangle(Pens.Black, qrX, y, qrSize, qrSize);
+                            }
                         }
                     }
-                    catch
+
+                    using (MemoryStream ms = new MemoryStream())
                     {
-                        g.DrawRectangle(Pens.Black, 15, currentY, qrSize, qrSize);
+                        bitmap.Save(ms, ImageFormat.Png);
+                        return ms.ToArray();
                     }
-                }
-                else
-                {
-                    g.DrawRectangle(Pens.Black, 15, currentY, qrSize, qrSize);
-                }
-
-                int totalsTableX = 180;
-                int totalsTableWidth = width - totalsTableX - 15;
-                using (Pen doublePen = new Pen(Color.Black, 1.5f))
-                using (Font totalsFont = new Font("Arial", 10f, FontStyle.Bold))
-                using (SolidBrush totalsBg = new SolidBrush(Color.FromArgb(240, 240, 240)))
-                {
-                    g.DrawRectangle(doublePen, totalsTableX, currentY, totalsTableWidth, 135);
-                    g.DrawRectangle(doublePen, totalsTableX + 2, currentY + 2, totalsTableWidth - 4, 131);
-
-                    int colLabelW = 120;
-                    int colVal1W = 80;
-                    int colTitleW = 180;
-                    int colVal2W = 120;
-
-                    int rowY = currentY + 4;
-                    StringFormat rightAlignFormat = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
-                    StringFormat centerFormat = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-
-                    // Row 1
-                    g.FillRectangle(totalsBg, totalsTableX + 4, rowY, colLabelW, 30);
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4, rowY, colLabelW, 30);
-                    g.DrawString("Details:", totalsFont, Brushes.Black, new RectangleF(totalsTableX + 4, rowY, colLabelW, 30), centerFormat);
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4 + colLabelW, rowY, colVal1W, 30);
-
-                    g.FillRectangle(totalsBg, totalsTableX + 4 + colLabelW + colVal1W, rowY, colTitleW, 30);
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4 + colLabelW + colVal1W, rowY, colTitleW, 30);
-                    g.DrawString("Total Amount:", totalsFont, Brushes.Black, new RectangleF(totalsTableX + 4 + colLabelW + colVal1W, rowY, colTitleW, 30), rightAlignFormat);
-
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4 + colLabelW + colVal1W + colTitleW, rowY, colVal2W, 30);
-                    g.DrawString(grossTotalVal.ToString("0.00"), totalsFont, Brushes.Black, new RectangleF(totalsTableX + 4 + colLabelW + colVal1W + colTitleW, rowY, colVal2W, 30), centerFormat);
-
-                    // Row 2
-                    rowY += 30;
-                    g.FillRectangle(totalsBg, totalsTableX + 4, rowY, colLabelW, 30);
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4, rowY, colLabelW, 30);
-                    g.DrawString("Payment Mode", totalsFont, Brushes.Black, new RectangleF(totalsTableX + 4, rowY, colLabelW, 30), centerFormat);
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4 + colLabelW, rowY, colVal1W, 30);
-                    g.DrawString(string.IsNullOrEmpty(save.PaymentMode) ? "Cash" : save.PaymentMode, totalsFont, Brushes.Black, new RectangleF(totalsTableX + 4 + colLabelW, rowY, colVal1W, 30), centerFormat);
-
-                    g.FillRectangle(totalsBg, totalsTableX + 4 + colLabelW + colVal1W, rowY, colTitleW, 30);
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4 + colLabelW + colVal1W, rowY, colTitleW, 30);
-                    g.DrawString("Amount Paid:", totalsFont, Brushes.Black, new RectangleF(totalsTableX + 4 + colLabelW + colVal1W, rowY, colTitleW, 30), rightAlignFormat);
-
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4 + colLabelW + colVal1W + colTitleW, rowY, colVal2W, 30);
-                    g.DrawString(paidAmountVal.ToString("0.00"), totalsFont, Brushes.Black, new RectangleF(totalsTableX + 4 + colLabelW + colVal1W + colTitleW, rowY, colVal2W, 30), centerFormat);
-
-                    // Row 3
-                    rowY += 30;
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4, rowY, colLabelW, 30);
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4 + colLabelW, rowY, colVal1W, 30);
-
-                    g.FillRectangle(totalsBg, totalsTableX + 4 + colLabelW + colVal1W, rowY, colTitleW, 30);
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4 + colLabelW + colVal1W, rowY, colTitleW, 30);
-                    g.DrawString("Total VAT:", totalsFont, Brushes.Black, new RectangleF(totalsTableX + 4 + colLabelW + colVal1W, rowY, colTitleW, 30), rightAlignFormat);
-
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4 + colLabelW + colVal1W + colTitleW, rowY, colVal2W, 30);
-                    g.DrawString(taxVal.ToString("0.00"), totalsFont, Brushes.Black, new RectangleF(totalsTableX + 4 + colLabelW + colVal1W + colTitleW, rowY, colVal2W, 30), centerFormat);
-
-                    // Row 4
-                    rowY += 30;
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4, rowY, colLabelW, 30);
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4 + colLabelW, rowY, colVal1W, 30);
-
-                    g.FillRectangle(totalsBg, totalsTableX + 4 + colLabelW + colVal1W, rowY, colTitleW, 30);
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4 + colLabelW + colVal1W, rowY, colTitleW, 30);
-                    g.DrawString("Balance:", totalsFont, Brushes.Black, new RectangleF(totalsTableX + 4 + colLabelW + colVal1W, rowY, colTitleW, 30), rightAlignFormat);
-
-                    g.DrawRectangle(Pens.Black, totalsTableX + 4 + colLabelW + colVal1W + colTitleW, rowY, colVal2W, 30);
-                    using (SolidBrush redBrush = new SolidBrush(Color.Red))
-                    {
-                        g.DrawString(balanceVal.ToString("0.00"), totalsFont, redBrush, new RectangleF(totalsTableX + 4 + colLabelW + colVal1W + colTitleW, rowY, colVal2W, 30), centerFormat);
-                    }
-                }
-
-                // --- 6. Bottom Notes & Address Banner ---
-                currentY = 655;
-                using (SolidBrush darkBrush = new SolidBrush(darkColor))
-                using (SolidBrush goldBrush = new SolidBrush(goldColor))
-                using (SolidBrush whiteBrush = new SolidBrush(Color.White))
-                {
-                    g.FillRectangle(darkBrush, 0, currentY, width, height - currentY);
-                    g.DrawLine(new Pen(goldColor, 2f), 0, currentY, width, currentY);
-
-                    StringFormat centerFormat = new StringFormat { Alignment = StringAlignment.Center };
-                    
-                    using (Font notesArFont = new Font("Arial", 9.5f, FontStyle.Bold))
-                    using (Font notesEnFont = new Font("Arial", 8f, FontStyle.Regular))
-                    {
-                        g.DrawString("ملاحظة : سياسة الإرجاع (في نفس اليوم) والاستبدال (خلال ٣ أيام) - (النظارات الشمسية فقط)", notesArFont, goldBrush, new RectangleF(0, currentY + 8, width, 20), centerFormat);
-                        g.DrawString("Note : Return Policy (Same Day) & Exchange (with in 3 days)-( ONLY SUNGLASSES )", notesEnFont, whiteBrush, new RectangleF(0, currentY + 28, width, 18), centerFormat);
-                    }
-
-                    g.DrawLine(new Pen(Color.FromArgb(80, 80, 80), 1), 50, currentY + 48, width - 50, currentY + 48);
-
-                    using (Font addrArFont = new Font("Arial", 9f, FontStyle.Bold))
-                    using (Font addrEnFont = new Font("Arial", 8f, FontStyle.Regular))
-                    {
-                        g.DrawString("الأحساء - الهفوف - الخالدية - خلف مستوصف المحيش - مقابل جامعة الملك فيصل", addrArFont, whiteBrush, new RectangleF(0, currentY + 54, width, 18), centerFormat);
-                        g.DrawString("Al-Ahsa Al Hofuf - Khalediyah - Behind Al-Muhaish Clinic - Opp TO King Faisal University", addrEnFont, new SolidBrush(Color.FromArgb(200, 200, 200)), new RectangleF(0, currentY + 72, width, 16), centerFormat);
-                    }
-                }
-
-                // Output as PNG bytes
-                using (MemoryStream ms = new MemoryStream())
-                {
-                    bitmap.Save(ms, ImageFormat.Png);
-                    return ms.ToArray();
                 }
             }
         }
 
-        private static int SumWidths(int[] widths, int count)
+        private class ParsedReceiptData
         {
-            int sum = 0;
-            for (int i = 0; i < count; i++)
+            public string InvoiceNo { get; set; } = "";
+            public string InvoiceDate { get; set; } = "";
+            public string CustomerName { get; set; } = "";
+            public string CustomerNo { get; set; } = "";
+
+            public List<ReceiptItemLine> Items { get; set; } = new List<ReceiptItemLine>();
+
+            public string SphRight { get; set; } = "0.00";
+            public string CylRight { get; set; } = "0.00";
+            public string AxisRight { get; set; } = "0";
+            public string AddRight { get; set; } = "0.00";
+
+            public string SphLeft { get; set; } = "0.00";
+            public string CylLeft { get; set; } = "0.00";
+            public string AxisLeft { get; set; } = "0";
+            public string AddLeft { get; set; } = "0.00";
+
+            public string Ipd { get; set; } = "—";
+
+            public double GrossTotal { get; set; }
+            public double Discount { get; set; }
+            public double Tax { get; set; }
+            public double NetTotal { get; set; }
+            public double PaidAmount { get; set; }
+            public double Balance { get; set; }
+            public string PaymentMode { get; set; } = "Cash";
+        }
+
+        private static ParsedReceiptData ParseReceiptData(SaveSalesDetails save, object dbResult)
+        {
+            var data = new ParsedReceiptData();
+            var mainRow = GetFirstRow(dbResult, "table");
+            var paidRow = GetFirstRow(dbResult, "table2");
+
+            data.InvoiceNo = GetDictValue(mainRow, "InvoiceNo", "invoiceNo")?.ToString();
+            if (string.IsNullOrWhiteSpace(data.InvoiceNo))
             {
-                sum += widths[i];
+                data.InvoiceNo = $"2020-{DateTime.Now:ddMMyyyy}-{save?.SalesId}";
             }
-            return sum;
+
+            data.CustomerName = GetDictValue(mainRow, "CustomerName", "customerName")?.ToString() ?? save?.CustomerName ?? "—";
+            data.CustomerNo = GetDictValue(mainRow, "CustomerNo", "customerNo")?.ToString() ?? save?.CustomerNo ?? "—";
+
+            string rawDate = GetDictValue(mainRow, "InvoiceDate", "invoiceDate")?.ToString();
+            data.InvoiceDate = DateTime.Now.ToString("yyyy-MM-dd");
+            if (!string.IsNullOrWhiteSpace(rawDate) && DateTime.TryParse(rawDate, out DateTime parsedDate))
+            {
+                data.InvoiceDate = parsedDate.ToString("yyyy-MM-dd");
+            }
+
+            // Extract item lines
+            var table1Rows = GetRows(dbResult, "table1");
+            foreach (var row in table1Rows)
+            {
+                string category = GetDictValue(row, "CategoryName", "Category")?.ToString();
+                string brand = GetDictValue(row, "BrandName", "Brand")?.ToString();
+                string product = GetDictValue(row, "ProductName", "Product")?.ToString();
+                string model = GetDictValue(row, "ModelNo", "Model")?.ToString();
+
+                double.TryParse(GetDictValue(row, "SellingPrice", "ProductValue")?.ToString(), out double price);
+                int.TryParse(GetDictValue(row, "Quantity")?.ToString(), out int qty);
+                if (qty <= 0) qty = 1;
+                double.TryParse(GetDictValue(row, "Tax")?.ToString(), out double tax);
+                double.TryParse(GetDictValue(row, "Discount")?.ToString(), out double discount);
+
+                double total = (price * qty) - discount + tax;
+
+                string brandDisplay = !string.IsNullOrWhiteSpace(brand)
+                    ? (!string.IsNullOrWhiteSpace(product) && !product.StartsWith(brand, StringComparison.OrdinalIgnoreCase) ? $"{brand} {product}" : brand)
+                    : (product ?? "—");
+
+                data.Items.Add(new ReceiptItemLine
+                {
+                    Category = string.IsNullOrWhiteSpace(category) ? "—" : category,
+                    Brand = string.IsNullOrWhiteSpace(brandDisplay) ? "—" : brandDisplay,
+                    Model = string.IsNullOrWhiteSpace(model) ? "—" : model,
+                    Price = price,
+                    Quantity = qty,
+                    Tax = tax,
+                    Discount = discount,
+                    Total = total
+                });
+            }
+
+            var table3Rows = GetRows(dbResult, "table3");
+            foreach (var row in table3Rows)
+            {
+                string category = GetDictValue(row, "Category", "CategoryName")?.ToString() ?? "CR39";
+                string orderLense = GetDictValue(row, "Orderlense", "OrderLense", "Brand")?.ToString() ?? "—";
+                double.TryParse(GetDictValue(row, "Price")?.ToString(), out double price);
+                int.TryParse(GetDictValue(row, "Quantity")?.ToString(), out int qty);
+                if (qty <= 0) qty = 1;
+                double.TryParse(GetDictValue(row, "Total")?.ToString(), out double total);
+                if (total == 0) total = price * qty;
+
+                data.Items.Add(new ReceiptItemLine
+                {
+                    Category = string.IsNullOrWhiteSpace(category) ? "CR39" : category,
+                    Brand = string.IsNullOrWhiteSpace(orderLense) ? "—" : orderLense,
+                    Model = "—",
+                    Price = price,
+                    Quantity = qty,
+                    Tax = 0,
+                    Discount = 0,
+                    Total = total
+                });
+            }
+
+            if (data.Items.Count == 0 && save?.SalesGrids != null)
+            {
+                foreach (var grid in save.SalesGrids)
+                {
+                    double.TryParse(grid.SellingPrice, out double price);
+                    int.TryParse(grid.Quantity, out int qty);
+                    if (qty <= 0) qty = 1;
+                    double.TryParse(grid.Discount, out double discount);
+                    double.TryParse(grid.Tax, out double tax);
+                    double total = (price * qty) - discount + tax;
+
+                    data.Items.Add(new ReceiptItemLine
+                    {
+                        Category = "—",
+                        Brand = $"Product #{grid.ProductId}",
+                        Model = "—",
+                        Price = price,
+                        Quantity = qty,
+                        Tax = tax,
+                        Discount = discount,
+                        Total = total
+                    });
+                }
+            }
+
+            // Extract Prescription Details
+            data.SphRight = FormatDiopter(GetDictValue(mainRow, "SPH_RightEye", "spH_RightEye"));
+            data.CylRight = FormatDiopter(GetDictValue(mainRow, "CYL_RightEye", "cyL_RightEye"));
+            data.AxisRight = FormatAxis(GetDictValue(mainRow, "AXIS_RightEye", "axiS_RightEye"));
+            data.AddRight = FormatDiopter(GetDictValue(mainRow, "ADD_RightEye", "adD_RightEye"));
+
+            data.SphLeft = FormatDiopter(GetDictValue(mainRow, "SPH_LeftEye", "spH_LeftEye"));
+            data.CylLeft = FormatDiopter(GetDictValue(mainRow, "CYL_LeftEye", "cyL_LeftEye"));
+            data.AxisLeft = FormatAxis(GetDictValue(mainRow, "AXIS_LeftEye", "axiS_LeftEye"));
+            data.AddLeft = FormatDiopter(GetDictValue(mainRow, "ADD_LeftEye", "adD_LeftEye"));
+
+            data.Ipd = FormatIpd(GetDictValue(mainRow, "SPH_IPD", "spH_IPD"));
+
+            // Extract Totals
+            double.TryParse(GetDictValue(mainRow, "GrossTotal")?.ToString() ?? save?.GrossTotal, out double grossTotalVal);
+            double.TryParse(GetDictValue(mainRow, "Discount")?.ToString() ?? save?.Discount, out double discountVal);
+            double.TryParse(GetDictValue(mainRow, "TotalTax")?.ToString() ?? save?.Tax, out double taxVal);
+            double.TryParse(GetDictValue(mainRow, "NetTotal")?.ToString() ?? save?.NetTotal, out double netTotalVal);
+
+            if (netTotalVal == 0 && data.Items.Count > 0)
+            {
+                netTotalVal = data.Items.Sum(x => x.Total);
+            }
+            if (grossTotalVal == 0)
+            {
+                grossTotalVal = netTotalVal + discountVal - taxVal;
+            }
+
+            object paidObj = GetDictValue(paidRow, "PaidAmount", "paidAmount") ?? save?.PaidAmount;
+            double.TryParse(paidObj?.ToString(), out double paidAmountVal);
+
+            object balanceObj = GetDictValue(mainRow, "Balance", "balance") ?? save?.Balance;
+            double.TryParse(balanceObj?.ToString(), out double balanceVal);
+
+            if (paidAmountVal == 0 && balanceVal == 0 && netTotalVal > 0)
+            {
+                paidAmountVal = netTotalVal;
+            }
+
+            data.GrossTotal = grossTotalVal;
+            data.Discount = discountVal;
+            data.Tax = taxVal;
+            data.NetTotal = netTotalVal;
+            data.PaidAmount = paidAmountVal;
+            data.Balance = balanceVal;
+            data.PaymentMode = string.IsNullOrWhiteSpace(save?.PaymentMode) ? "Cash" : save.PaymentMode;
+
+            return data;
+        }
+
+        private static Dictionary<string, object> GetFirstRow(object dbResult, string tableName = "table")
+        {
+            if (dbResult is Dictionary<string, List<Dictionary<string, object>>> dict)
+            {
+                if (dict.TryGetValue(tableName, out var list) && list != null && list.Count > 0)
+                {
+                    return list[0];
+                }
+            }
+            else if (dbResult is List<Dictionary<string, object>> listRows && listRows.Count > 0)
+            {
+                return listRows[0];
+            }
+            return null;
+        }
+
+        private static List<Dictionary<string, object>> GetRows(object dbResult, string tableName)
+        {
+            if (dbResult is Dictionary<string, List<Dictionary<string, object>>> dict)
+            {
+                if (dict.TryGetValue(tableName, out var list) && list != null)
+                {
+                    return list;
+                }
+            }
+            return new List<Dictionary<string, object>>();
+        }
+
+        private static object GetDictValue(Dictionary<string, object> dict, params string[] keys)
+        {
+            if (dict == null) return null;
+            foreach (var key in keys)
+            {
+                foreach (var kvp in dict)
+                {
+                    if (string.Equals(kvp.Key, key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return kvp.Value;
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static string FormatDiopter(object val)
+        {
+            if (val == null) return "0.00";
+            string s = val.ToString().Trim();
+            if (string.IsNullOrEmpty(s) || s == "—") return "0.00";
+
+            if (s.StartsWith("+") || s.StartsWith("-"))
+            {
+                if (double.TryParse(s, out double d1))
+                {
+                    return d1 > 0 ? "+" + d1.ToString("0.00") : d1.ToString("0.00");
+                }
+                return s;
+            }
+
+            if (double.TryParse(s, out double d2))
+            {
+                return (d2 > 0) ? "+" + d2.ToString("0.00") : d2.ToString("0.00");
+            }
+            return s;
+        }
+
+        private static string FormatAxis(object val)
+        {
+            if (val == null) return "0";
+            string s = val.ToString().Trim();
+            if (string.IsNullOrEmpty(s) || s == "—") return "0";
+            if (double.TryParse(s, out double d))
+            {
+                return ((int)d).ToString();
+            }
+            return s;
+        }
+
+        private static string FormatIpd(object val)
+        {
+            if (val == null) return "—";
+            string s = val.ToString().Trim();
+            if (string.IsNullOrEmpty(s) || s == "—") return "—";
+            if (s.EndsWith("mc", StringComparison.OrdinalIgnoreCase)) return s;
+            return s + " mc";
+        }
+
+        private static string FormatMoneySar(double value)
+        {
+            if (Math.Abs(value - Math.Floor(value)) < 0.001)
+            {
+                return $"{((long)value)} SAR";
+            }
+            return $"{value:0.##} SAR";
+        }
+
+        private static string FormatMoneySar2Decimals(double value)
+        {
+            return $"{value:0.00} SAR";
         }
     }
 }
