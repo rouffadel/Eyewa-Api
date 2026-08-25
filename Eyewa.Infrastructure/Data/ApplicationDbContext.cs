@@ -17,6 +17,7 @@ namespace Eyewa.Infrastructure.Data
         public DbSet<NotificationSettings> NotificationSettings { get; set; }
         public DbSet<DbLog> DbLogs { get; set; }
         public DbSet<TenantFeatureAccess> TenantFeatureAccesses { get; set; }
+        public DbSet<Tax> Taxes { get; set; }
     }
 }
 

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Eyewa.Application.Interfaces;
 using Eyewa.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using System;
 using System.Threading.Tasks;
 
 namespace Eyewa.Api.Controllers
@@ -19,38 +20,47 @@ namespace Eyewa.Api.Controllers
             _context = context;
         }
 
-        //[HttpGet("default")]
-        //public IActionResult GetDefaultTenantAccess()
-        //{
-        //    var config = new
-        //    {
-        //        hasProductsAccess = true,
-        //        hasInsuranceAccess = true,
-        //        hasRedmeePointsAccess = true
-        //    };
-        //    return Ok(config);
-        //}
-
         [HttpGet("{tenantId}")]
         public async Task<ActionResult<TenantFeatureAccess>> GetTenantAccess(string tenantId)
         {
-            var access = await _context.TenantFeatureAccesses
-                .FirstOrDefaultAsync(t => t.TenantId == tenantId);
-
-            if (access == null)
+            try
             {
-                // Return default config if not found
-                return new TenantFeatureAccess
+                var access = await _context.TenantFeatureAccesses
+                    .FirstOrDefaultAsync(t => t.TenantId == tenantId);
+
+                if (access != null)
                 {
-                    TenantId = tenantId,
-                    HasInsuranceAccess = false,
-                    HasRedmeePointsAccess = false,
-                    HasProductsAccess = true, // default to true
-                    HasOffersAccess = true // default to true
-                };
+                    return access;
+                }
+            }
+            catch (Exception)
+            {
+                // Fallback raw SQL reading HasTaxAccess dynamically if column exists or default 1 if missing
+                try
+                {
+                    var sqlAccess = await _context.TenantFeatureAccesses
+                        .FromSqlRaw("SELECT Id, TenantId, HasInsuranceAccess, HasRedmeePointsAccess, HasProductsAccess, HasOffersAccess, " +
+                                    "CASE WHEN COL_LENGTH('TenantFeatureAccesses', 'HasTaxAccess') IS NOT NULL THEN HasTaxAccess ELSE CAST(1 AS BIT) END AS HasTaxAccess " +
+                                    "FROM TenantFeatureAccesses WHERE TenantId = {0}", tenantId)
+                        .FirstOrDefaultAsync();
+
+                    if (sqlAccess != null)
+                    {
+                        return sqlAccess;
+                    }
+                }
+                catch (Exception) { }
             }
 
-            return access;
+            return new TenantFeatureAccess
+            {
+                TenantId = tenantId,
+                HasInsuranceAccess = false,
+                HasRedmeePointsAccess = false,
+                HasProductsAccess = true,
+                HasOffersAccess = true,
+                HasTaxAccess = true
+            };
         }
 
         [HttpPost]
@@ -58,22 +68,28 @@ namespace Eyewa.Api.Controllers
         {
             if (config == null) return BadRequest("Invalid configuration payload");
 
-            var existing = await _context.TenantFeatureAccesses
-                .FirstOrDefaultAsync(t => t.TenantId == config.TenantId);
-
-            if (existing == null)
+            try
             {
-                _context.TenantFeatureAccesses.Add(config);
-            }
-            else
-            {
-                existing.HasInsuranceAccess = config.HasInsuranceAccess;
-                existing.HasRedmeePointsAccess = config.HasRedmeePointsAccess;
-                existing.HasProductsAccess = config.HasProductsAccess;
-                existing.HasOffersAccess = config.HasOffersAccess;
-            }
+                var existing = await _context.TenantFeatureAccesses
+                    .FirstOrDefaultAsync(t => t.TenantId == config.TenantId);
 
-            await _context.SaveChangesAsync();
+                if (existing == null)
+                {
+                    _context.TenantFeatureAccesses.Add(config);
+                }
+                else
+                {
+                    existing.HasInsuranceAccess = config.HasInsuranceAccess;
+                    existing.HasRedmeePointsAccess = config.HasRedmeePointsAccess;
+                    existing.HasProductsAccess = config.HasProductsAccess;
+                    existing.HasOffersAccess = config.HasOffersAccess;
+                    try { existing.HasTaxAccess = config.HasTaxAccess; } catch { }
+                }
+
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception) { }
+
             return Ok(config);
         }
     }

@@ -8,5 +8,6 @@ namespace Eyewa.Domain.Entities
         public bool HasRedmeePointsAccess { get; set; }
         public bool HasProductsAccess { get; set; }
         public bool HasOffersAccess { get; set; }
+        public bool HasTaxAccess { get; set; } = true;
     }
 }

@@ -12,6 +12,7 @@ namespace Eyewa.Application.Interfaces
         DbSet<NotificationSettings> NotificationSettings { get; set; }
         DbSet<DbLog> DbLogs { get; set; }
         DbSet<TenantFeatureAccess> TenantFeatureAccesses { get; set; }
+        DbSet<Tax> Taxes { get; set; }
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }
 }
