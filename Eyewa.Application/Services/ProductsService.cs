@@ -151,6 +151,39 @@ namespace Eyewa.Application.Services
                 
                 var result = await _dbExecutor.ExecuteStoredProcedureAsync("SP_GetDataSales", parameters);
                 
+                if (result == null || result.Count == 0)
+                {
+                    var sql = @"
+                        SELECT P.ProductID, P.ProductName, P.ProductValue, P.MaxDiscount,
+                               ISNULL(P.CategoryID, 0) AS CategoryID,
+                               ISNULL(C.CategoryName, 'General') AS CategoryName,
+                               ISNULL(P.BrandID, 0) AS BrandID,
+                               ISNULL(B.BrandName, 'Generic') AS BrandName,
+                               P.PhotoPath
+                        FROM Products P
+                        LEFT JOIN Category C ON P.CategoryID = C.CategoryID
+                        LEFT JOIN Brand B ON P.BrandID = B.BrandID
+                        WHERE 1=1";
+                    var queryParams = new Dictionary<string, object?>();
+                    if (!string.IsNullOrEmpty(productName))
+                    {
+                        sql += " AND P.ProductName LIKE @ProductName";
+                        queryParams["@ProductName"] = "%" + productName + "%";
+                    }
+                    if (categoryId > 0)
+                    {
+                        sql += " AND P.CategoryID = @CategoryID";
+                        queryParams["@CategoryID"] = categoryId;
+                    }
+                    if (brandId > 0)
+                    {
+                        sql += " AND P.BrandID = @BrandID";
+                        queryParams["@BrandID"] = brandId;
+                    }
+
+                    result = await _dbExecutor.ExecuteQueryAsync(sql, queryParams);
+                }
+
                 tres.Status = "200";
                 tres.Message = "Success";
                 tres.objresult = result;
@@ -211,6 +244,27 @@ namespace Eyewa.Application.Services
                     "SP_GetDataSales",
                     parameters);
 
+                if (result == null || result.Count == 0)
+                {
+                    var sql = @"
+                        SELECT P.ProductID, P.ProductName, P.ProductValue, P.MaxDiscount,
+                               ISNULL(P.CategoryID, 0) AS CategoryID,
+                               ISNULL(C.CategoryName, 'General') AS CategoryName,
+                               ISNULL(P.BrandID, 0) AS BrandID,
+                               ISNULL(B.BrandName, 'Generic') AS BrandName,
+                               P.PhotoPath
+                        FROM Products P
+                        LEFT JOIN Category C ON P.CategoryID = C.CategoryID
+                        LEFT JOIN Brand B ON P.BrandID = B.BrandID
+                        WHERE P.ProductName LIKE @ProductName";
+                    var queryParams = new Dictionary<string, object?>
+                    {
+                        { "@ProductName", "%" + (productName ?? "").Trim() + "%" }
+                    };
+
+                    result = await _dbExecutor.ExecuteQueryAsync(sql, queryParams);
+                }
+
                 tres.Status = "200";
                 tres.Message = "Success";
                 tres.objresult = result;
@@ -241,6 +295,18 @@ namespace Eyewa.Application.Services
                 var result = await _dbExecutor.ExecuteStoredProcedureAsync(
                     "SP_GetDataSales",
                     parameters);
+
+                if (result == null || result.Count == 0)
+                {
+                    var sql = @"
+                        SELECT P.ProductID, P.ProductName, P.ProductValue, P.MaxDiscount,
+                               P.CategoryID, C.CategoryName, P.BrandID, B.BrandName, P.PhotoPath
+                        FROM Products P
+                        LEFT JOIN Category C ON P.CategoryID = C.CategoryID
+                        LEFT JOIN Brand B ON P.BrandID = B.BrandID";
+
+                    result = await _dbExecutor.ExecuteQueryAsync(sql);
+                }
 
                 tres.Status = "200";
                 tres.Message = "Success";

@@ -83,7 +83,7 @@ namespace Eyewa.Api.Controllers
 
         [Route("SearchProductByKey")]
         [HttpPost]
-        public async Task<IActionResult> SearchProductByKey(int StoreId, string ProductName)
+        public async Task<IActionResult> SearchProductByKey([FromQuery] int StoreId, [FromQuery] string ProductName)
         {
             var result = await _productsService.SearchProductByKey(StoreId, ProductName);
 

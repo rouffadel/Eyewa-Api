@@ -42,4 +42,8 @@
 
 
 
+  <Target Name="FreePort7207" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Debug'">
+    <Exec Command="powershell -NoProfile -Command &quot;Get-NetTCPConnection -LocalPort 7207 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }&quot;" ContinueOnError="true" IgnoreExitCode="true" />
+  </Target>
+
 </Project>

@@ -31,6 +31,7 @@ namespace Eyewa.Api.Controllers
             _dbLogger = dbLogger;
         }
 
+        [AllowAnonymous]
         [Route("FillStore")]
         [HttpGet]
         public async Task<IActionResult> FillStore(int LoginId, int StoreId)

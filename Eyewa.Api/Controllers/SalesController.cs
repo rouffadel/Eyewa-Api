@@ -319,7 +319,61 @@ namespace Eyewa.Api.Controllers
 
         private async Task<List<Dictionary<string, object>>> EnrichOrderStatusList(List<Dictionary<string, object>> list)
         {
-            if (list == null) return list;
+            if (list == null || list.Count == 0) return list;
+
+            var salesIds = new List<int>();
+            foreach (var row in list)
+            {
+                int salesId = 0;
+                if (row.ContainsKey("SalesId") && row["SalesId"] != null)
+                    salesId = Convert.ToInt32(row["SalesId"]);
+                else if (row.ContainsKey("SaleID") && row["SaleID"] != null)
+                    salesId = Convert.ToInt32(row["SaleID"]);
+
+                if (salesId > 0 && !salesIds.Contains(salesId))
+                {
+                    salesIds.Add(salesId);
+                }
+            }
+
+            if (salesIds.Count == 0) return list;
+
+            string idListStr = string.Join(",", salesIds);
+            string batchSql = $@"
+                SELECT 
+                    v.SalesId,
+                    SUM(v.ItemsSum) AS ItemsSum,
+                    SUM(v.LensesSum) AS LensesSum,
+                    SUM(v.PaidSum) AS PaidSum
+                FROM (
+                    SELECT SalesID AS SalesId, ISNULL(SUM(Quantity * SellingPrice), 0) AS ItemsSum, 0 AS LensesSum, 0 AS PaidSum
+                    FROM SalesDetails WHERE SalesID IN ({idListStr}) AND IsActive = 1 GROUP BY SalesID
+                    UNION ALL
+                    SELECT SalesID AS SalesId, 0 AS ItemsSum, ISNULL(SUM(Quantity * Price), 0) AS LensesSum, 0 AS PaidSum
+                    FROM OrderLense WHERE SalesID IN ({idListStr}) AND IsActive = 1 GROUP BY SalesID
+                    UNION ALL
+                    SELECT SaleID AS SalesId, 0 AS ItemsSum, 0 AS LensesSum, ISNULL(SUM(PaymentAmount), 0) AS PaidSum
+                    FROM InvoicePayment WHERE SaleID IN ({idListStr}) AND IsActive = 1 GROUP BY SaleID
+                ) v
+                GROUP BY v.SalesId";
+
+            var summaryRows = await _dbExecutor.ExecuteQueryAsync(batchSql);
+            var summaryMap = new Dictionary<int, (double itemsSum, double lensesSum, double paidSum)>();
+
+            if (summaryRows != null)
+            {
+                foreach (var sRow in summaryRows)
+                {
+                    if (sRow.ContainsKey("SalesId") && sRow["SalesId"] != null)
+                    {
+                        int sId = Convert.ToInt32(sRow["SalesId"]);
+                        double iSum = sRow.ContainsKey("ItemsSum") && sRow["ItemsSum"] != null ? Convert.ToDouble(sRow["ItemsSum"]) : 0;
+                        double lSum = sRow.ContainsKey("LensesSum") && sRow["LensesSum"] != null ? Convert.ToDouble(sRow["LensesSum"]) : 0;
+                        double pSum = sRow.ContainsKey("PaidSum") && sRow["PaidSum"] != null ? Convert.ToDouble(sRow["PaidSum"]) : 0;
+                        summaryMap[sId] = (iSum, lSum, pSum);
+                    }
+                }
+            }
 
             foreach (var row in list)
             {
@@ -329,42 +383,25 @@ namespace Eyewa.Api.Controllers
                 else if (row.ContainsKey("SaleID") && row["SaleID"] != null)
                     salesId = Convert.ToInt32(row["SaleID"]);
 
-                if (salesId == 0) continue;
-
                 double grossTotal = 0;
                 if (row.ContainsKey("GrossTotal") && row["GrossTotal"] != null)
                     grossTotal = Convert.ToDouble(row["GrossTotal"]);
 
+                summaryMap.TryGetValue(salesId, out var totals);
+
                 if (grossTotal == 0)
                 {
-                    // Calculate from SalesDetails
-                    string sqlItems = "SELECT ISNULL(SUM(Quantity * SellingPrice), 0) FROM SalesDetails WHERE SalesID = @SalesId AND IsActive = 1";
-                    var itemsRes = await _dbExecutor.ExecuteQueryAsync(sqlItems, new Dictionary<string, object?> { { "SalesId", salesId } });
-                    double itemsSum = itemsRes != null && itemsRes.Count > 0 ? Convert.ToDouble(itemsRes[0].Values.FirstOrDefault() ?? 0) : 0;
-
-                    // Calculate from OrderLense
-                    string sqlLenses = "SELECT ISNULL(SUM(Quantity * Price), 0) FROM OrderLense WHERE SalesID = @SalesId AND IsActive = 1";
-                    var lensesRes = await _dbExecutor.ExecuteQueryAsync(sqlLenses, new Dictionary<string, object?> { { "SalesId", salesId } });
-                    double lensesSum = lensesRes != null && lensesRes.Count > 0 ? Convert.ToDouble(lensesRes[0].Values.FirstOrDefault() ?? 0) : 0;
-
-                    grossTotal = itemsSum + lensesSum;
-
+                    grossTotal = totals.itemsSum + totals.lensesSum;
                     if (grossTotal > 0)
                     {
                         grossTotal = Math.Round(grossTotal * 1.15, 2);
                     }
-
                     row["GrossTotal"] = grossTotal;
                 }
 
-                // Calculate Paid Amount
-                string sqlPaid = "SELECT ISNULL(SUM(PaymentAmount), 0) FROM InvoicePayment WHERE SaleID = @SalesId AND IsActive = 1";
-                var paidRes = await _dbExecutor.ExecuteQueryAsync(sqlPaid, new Dictionary<string, object?> { { "SalesId", salesId } });
-                double paidAmount = paidRes != null && paidRes.Count > 0 ? Convert.ToDouble(paidRes[0].Values.FirstOrDefault() ?? 0) : 0;
-
+                double paidAmount = totals.paidSum;
                 row["PaidAmount"] = paidAmount;
 
-                // Calculate Balance
                 double balance = grossTotal - paidAmount;
                 if (balance < 0) balance = 0;
                 row["Balance"] = balance;
