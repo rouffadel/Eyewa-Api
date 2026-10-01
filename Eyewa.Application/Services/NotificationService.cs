@@ -18,7 +18,23 @@ namespace Eyewa.Application.Services
         private readonly IApplicationDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly IDbLoggerService _dbLogger;
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private static readonly HttpClient _httpClient;
+
+        static NotificationService()
+        {
+            try
+            {
+                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12 | SecurityProtocolType.Tls13;
+            }
+            catch { }
+
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) => true,
+                SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13
+            };
+            _httpClient = new HttpClient(handler);
+        }
 
         public NotificationService(
             IApplicationDbContext context,

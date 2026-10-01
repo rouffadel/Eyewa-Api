@@ -300,14 +300,157 @@ namespace Eyewa.Api.Controllers
             return Ok(statuses);
         }
 
-        [Route("order-status-list")]
+        [Route("sales-status-summary")]
         [HttpGet]
-        public async Task<IActionResult> GetOrderStatusList()
+        public async Task<IActionResult> GetSalesStatusSummary([FromQuery] int? storeId)
         {
             try
             {
-                // Calls the GetOrderStatusList stored procedure to fetch recent sales
-                var list = await _dbExecutor.ExecuteStoredProcedureAsync("GetOrderStatusList", new Dictionary<string, object?>());
+                string sql = @"
+                    SELECT 
+                        ISNULL(NetTotal, 0) AS NetTotal,
+                        ISNULL(Balance, 0) AS Balance
+                    FROM Sale
+                    WHERE (IsDeleted IS NULL OR IsDeleted = 0)
+                      AND (IsActive IS NULL OR IsActive = 1)
+                      AND InvoiceDate >= CAST(GETDATE() AS DATE)
+                      AND InvoiceDate < DATEADD(DAY, 1, CAST(GETDATE() AS DATE))";
+
+                var paramDict = new Dictionary<string, object?>();
+
+                if (storeId.HasValue && storeId.Value > 0)
+                {
+                    sql += " AND StoreID = @StoreID";
+                    paramDict["StoreID"] = storeId.Value;
+                }
+
+                var rows = await _dbExecutor.ExecuteQueryAsync(sql, paramDict.Count > 0 ? paramDict : null);
+
+                int completed = 0;
+                int pending = 0;
+                int incomplete = 0;
+
+                decimal completedAmount = 0m;
+                decimal pendingAmount = 0m;
+                decimal incompleteAmount = 0m;
+
+                if (rows != null)
+                {
+                    foreach (var row in rows)
+                    {
+                        decimal net = 0m;
+                        decimal bal = 0m;
+
+                        if (row.ContainsKey("NetTotal") && row["NetTotal"] != null && row["NetTotal"] != DBNull.Value)
+                            net = Convert.ToDecimal(row["NetTotal"]);
+
+                        if (row.ContainsKey("Balance") && row["Balance"] != null && row["Balance"] != DBNull.Value)
+                            bal = Convert.ToDecimal(row["Balance"]);
+
+                        if (bal == 0m && net > 0m)
+                        {
+                            completed++;
+                            completedAmount += net;
+                        }
+                        else if (bal > 0m && net > 0m)
+                        {
+                            pending++;
+                            pendingAmount += net;
+                        }
+                        else
+                        {
+                            incomplete++;
+                            incompleteAmount += net;
+                        }
+                    }
+                }
+
+                var result = new
+                {
+                    totalInvoices = (rows?.Count ?? 0),
+                    completed = completed,
+                    pending = pending,
+                    incomplete = incomplete,
+                    completedAmount = completedAmount,
+                    pendingAmount = pendingAmount,
+                    incompleteAmount = incompleteAmount
+                };
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _dbLogger.LogError("GetSalesStatusSummary Error", ex.Message);
+                return BadRequest(new { Status = "500", Message = ex.Message });
+            }
+        }
+
+        [Route("order-status-list")]
+        [HttpGet]
+        public async Task<IActionResult> GetOrderStatusList(
+            [FromQuery] int? storeId,
+            [FromQuery] int? take,
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null,
+            [FromQuery] string? search = null)
+        {
+            try
+            {
+                int limit = (take.HasValue && take.Value > 0) ? take.Value : 100;
+
+                string sql = $@"
+                    SELECT TOP ({limit})
+                        s.SaleID AS SalesId,
+                        ISNULL(s.InvoiceNo, '#' + CAST(s.SaleID AS VARCHAR)) AS InvoiceNo,
+                        ISNULL(s.CustomerName, 'Walk-in Customer') AS CustomerName,
+                        ISNULL(s.CustomerNo, '') AS CustomerNo,
+                        ISNULL(s.GrossTotal, 0) AS GrossTotal,
+                        ISNULL(s.NetTotal - s.Balance, 0) AS PaidAmount,
+                        ISNULL(s.Balance, 0) AS Balance,
+                        ISNULL(s.Discount, 0) AS DiscountAmount,
+                        0 AS InsuranceAmount,
+                        ot.StatusId AS OrderStatusId,
+                        ISNULL(st.StatusName, 'Pending') AS StatusName,
+                        ISNULL(s.InvoiceDate, s.CreatedDate) AS CreatedDate
+                    FROM Sale s
+                    LEFT JOIN (
+                        SELECT OrderId, StatusId, ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY Id DESC) AS rn
+                        FROM OrderTracking
+                        WHERE IsActive = 1
+                    ) ot ON s.SaleID = ot.OrderId AND ot.rn = 1
+                    LEFT JOIN OrderStatuses st ON ot.StatusId = st.Id
+                    WHERE (s.IsDeleted IS NULL OR s.IsDeleted = 0)
+                      AND (s.IsActive IS NULL OR s.IsActive = 1)";
+
+                var paramDict = new Dictionary<string, object?>();
+
+                if (storeId.HasValue && storeId.Value > 0)
+                {
+                    sql += " AND s.StoreID = @StoreID";
+                    paramDict["StoreID"] = storeId.Value;
+                }
+
+                if (fromDate.HasValue)
+                {
+                    sql += " AND s.InvoiceDate >= @FromDate";
+                    paramDict["FromDate"] = fromDate.Value.Date;
+                }
+
+                if (toDate.HasValue)
+                {
+                    sql += " AND s.InvoiceDate < @ToDate";
+                    paramDict["ToDate"] = toDate.Value.Date.AddDays(1);
+                }
+
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    sql += " AND (LOWER(s.CustomerName) LIKE @Search OR LOWER(s.InvoiceNo) LIKE @Search OR LOWER(s.CustomerNo) LIKE @Search OR CAST(s.SaleID AS VARCHAR) LIKE @Search)";
+                    paramDict["Search"] = "%" + search.Trim().ToLower() + "%";
+                }
+
+                sql += " ORDER BY s.InvoiceDate DESC, s.SaleID DESC";
+
+                var list = await _dbExecutor.ExecuteQueryAsync(sql, paramDict.Count > 0 ? paramDict : null) ?? new List<Dictionary<string, object>>();
                 var enrichedList = await EnrichOrderStatusList(list);
                 return Ok(enrichedList);
             }
@@ -400,10 +543,18 @@ namespace Eyewa.Api.Controllers
                 }
 
                 double paidAmount = totals.paidSum;
+                if (paidAmount == 0 && row.ContainsKey("PaidAmount") && row["PaidAmount"] != null && row["PaidAmount"] != DBNull.Value)
+                {
+                    paidAmount = Convert.ToDouble(row["PaidAmount"]);
+                }
                 row["PaidAmount"] = paidAmount;
 
                 double balance = grossTotal - paidAmount;
                 if (balance < 0) balance = 0;
+                if (totals.paidSum == 0 && row.ContainsKey("Balance") && row["Balance"] != null && row["Balance"] != DBNull.Value)
+                {
+                    balance = Convert.ToDouble(row["Balance"]);
+                }
                 row["Balance"] = balance;
             }
 

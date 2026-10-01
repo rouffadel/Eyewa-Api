@@ -251,10 +251,45 @@ namespace Eyewa.Application.Services
                                  string.IsNullOrEmpty(status) ||
                                  status.IndexOf("success", StringComparison.OrdinalIgnoreCase) >= 0;
 
-                if (isSuccess || true) // Force it to load for now to test, wait, if I force it, it might fail ZATCA.
+                if (isSuccess)
                 {
                     try
                     {
+                        if (save.StoreId > 0 && save.SalesGrids != null && save.SalesGrids.Count > 0)
+                        {
+                            foreach (var item in save.SalesGrids)
+                            {
+                                int qty = int.TryParse(item.Quantity, out var parsedQty) ? parsedQty : 0;
+                                if (item.ProductId > 0 && qty > 0)
+                                {
+                                    try
+                                    {
+                                        string updateStockSql = @"
+                                            IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'StoreStock')
+                                            BEGIN
+                                                IF EXISTS (SELECT 1 FROM StoreStock WHERE StoreID = @StoreID AND ProductID = @ProductID AND IsActive = 1 AND IsCurrent = 1)
+                                                BEGIN
+                                                    UPDATE StoreStock 
+                                                    SET AvailableQuantity = CASE WHEN AvailableQuantity >= @Qty THEN AvailableQuantity - @Qty ELSE 0 END 
+                                                    WHERE StoreID = @StoreID AND ProductID = @ProductID AND IsActive = 1 AND IsCurrent = 1
+                                                END
+                                            END";
+                                        var stockParams = new Dictionary<string, object?>
+                                        {
+                                            { "@StoreID", save.StoreId },
+                                            { "@ProductID", item.ProductId },
+                                            { "@Qty", qty }
+                                        };
+                                        await _dbExecutor.ExecuteQueryAsync(updateStockSql, stockParams);
+                                    }
+                                    catch (Exception stockEx)
+                                    {
+                                        _dbLogger.LogError("StoreStock deduction error: " + stockEx.Message, stockEx.StackTrace);
+                                    }
+                                }
+                            }
+                        }
+
                         await GenerateSimplifiedInvoiceTesting(save, salesId);
                     }
                     catch (Exception zatcaEx)
