@@ -18,6 +18,7 @@ namespace Eyewa.Infrastructure.Data
         public DbSet<DbLog> DbLogs { get; set; }
         public DbSet<TenantFeatureAccess> TenantFeatureAccesses { get; set; }
         public DbSet<Tax> Taxes { get; set; }
+        public DbSet<CompanyConfiguration> CompanyConfigurations { get; set; }
     }
 }
 
